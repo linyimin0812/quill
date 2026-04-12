@@ -1,0 +1,33 @@
+node_modules/
+dist/
+.turbo/
+*.tsbuildinfo
+
+# Tauri
+apps/desktop/src-tauri/target/
+apps/desktop/src-tauri/binaries/quill-api-*
+apps/desktop/src-tauri/binaries/quill-api-bundle/
+
+# NestJS
+apps/api/dist/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Environment
+.env
+.env.local
+.env.*.local
+
+# Logs
+*.log
+npm-debug.log*
+pnpm-debug.log*
+
