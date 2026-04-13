@@ -4,7 +4,7 @@ import { useSettingsStore } from '@/store/settingsStore';
 import { useEditorStore } from '@/store/editorStore';
 import { useVaultStore } from '@/store/vaultStore';
 
-const SIDECAR_URL = 'http://localhost:3001/quill';
+const SIDECAR_URL = 'http://localhost:3001/quill/api';
 
 export function useAiStream() {
   const addMessage = useAiStore((s) => s.addMessage);

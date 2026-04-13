@@ -5,7 +5,6 @@ import { QuillEditor, type QuillEditorHandle } from '@/editor/EditorView';
 import { MarkdownPreview } from '../preview/MarkdownPreview';
 import { SlashMenu } from '../editor/SlashMenu';
 import { CodeBlockLangMenu } from '../editor/CodeBlockLangMenu';
-import { AiPanel } from '../ai/AiPanel';
 import { hideSlashMenu, type SlashMenuState } from '@/editor/extensions/SlashCommandPlugin';
 import { type CodeBlockMenuState } from '@/editor/extensions/CodeBlockExtension';
 import type { ContainerPlugin } from '@quill/container-plugins';
@@ -433,8 +432,6 @@ export function WorkArea() {
         </div>
       )}
 
-      {/* AI Panel */}
-      <AiPanel />
     </div>
   );
 }
