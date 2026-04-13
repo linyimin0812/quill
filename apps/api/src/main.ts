@@ -7,7 +7,7 @@ async function bootstrap() {
   app.setGlobalPrefix('quill/api');
 
   app.enableCors({
-    origin: ['http://localhost:1420', 'tauri://localhost'],
+    origin: true,
     methods: ['GET', 'POST', 'PUT', 'DELETE'],
   });
 
