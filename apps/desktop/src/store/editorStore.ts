@@ -8,12 +8,25 @@ const AUTO_SAVE_DELAY_MS = 1000;
 
 export type ViewMode = 'split' | 'edit' | 'preview';
 
+export type FileType = 'text' | 'image' | 'pdf';
+
+const IMAGE_EXTENSIONS = new Set(['png', 'jpg', 'jpeg', 'gif', 'webp', 'svg', 'bmp', 'ico']);
+const PDF_EXTENSIONS = new Set(['pdf']);
+
+export function detectFileType(filePath: string): FileType {
+  const ext = filePath.split('.').pop()?.toLowerCase() ?? '';
+  if (IMAGE_EXTENSIONS.has(ext)) return 'image';
+  if (PDF_EXTENSIONS.has(ext)) return 'pdf';
+  return 'text';
+}
+
 export interface FileTab {
   id: string;
   name: string;
   path: string;
   content: string;
   isDirty: boolean;
+  fileType: FileType;
 }
 
 interface EditorState {
@@ -166,13 +179,15 @@ export const useEditorStore = create<EditorState>()(
           return;
         }
         try {
-          const content = await useVaultStore.getState().readFile(filePath);
+          const fileType = detectFileType(filePath);
+          const content = fileType === 'text' ? await useVaultStore.getState().readFile(filePath) : '';
           const newTab: FileTab = {
             id: tabId,
             name,
             path: filePath,
             content,
             isDirty: false,
+            fileType,
           };
           set((state) => ({
             tabs: [...state.tabs, newTab],
@@ -195,13 +210,15 @@ export const useEditorStore = create<EditorState>()(
           const alreadyOpen = get().tabs.find((t) => t.id === tabId);
           if (alreadyOpen) continue;
           try {
-            const content = await useVaultStore.getState().readFile(tabInfo.path);
+            const fileType = detectFileType(tabInfo.path);
+            const content = fileType === 'text' ? await useVaultStore.getState().readFile(tabInfo.path) : '';
             const newTab: FileTab = {
               id: tabId,
               name: tabInfo.name,
               path: tabInfo.path,
               content,
               isDirty: false,
+              fileType,
             };
             set((state) => ({
               tabs: [...state.tabs, newTab],

@@ -293,7 +293,7 @@ export function WorkArea() {
   return (
     <div className="work-area" ref={splitContainerRef}>
       {/* Editor pane */}
-      {(viewMode === 'split' || viewMode === 'edit') && (
+      {activeTab?.fileType !== 'image' && (viewMode === 'split' || viewMode === 'edit') && (
         <div className="pane-src" style={viewMode === 'split' ? { flex: editorFlex } : undefined}>
           {/* File tabs */}
           <div className="file-tabs">
@@ -425,7 +425,7 @@ export function WorkArea() {
       )}
 
       {/* Split resizer */}
-      {viewMode === 'split' && (
+      {activeTab?.fileType !== 'image' && viewMode === 'split' && (
         <div
           className="split-resizer"
           onMouseDown={() => {
@@ -436,8 +436,30 @@ export function WorkArea() {
         />
       )}
 
+      {/* Image viewer — full area when active tab is an image */}
+      {activeTab?.fileType === 'image' && (
+        <div className="image-viewer">
+          <div className="image-viewer-inner">
+            <img
+              src={(() => {
+                const imagePath = activeTab.path;
+                const apiBase = typeof window !== 'undefined' && window.location.protocol === 'tauri:'
+                  ? 'http://localhost:3001' : '';
+                let url = `${apiBase}/quill/api/vault/image?path=${encodeURIComponent(imagePath)}`;
+                if (vaultRoot) url += `&root=${encodeURIComponent(vaultRoot)}`;
+                return url;
+              })()}
+              alt={activeTab.name}
+            />
+            <div className="image-viewer-info">
+              <span>📄 {activeTab.path}</span>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Preview pane */}
-      {(viewMode === 'split' || viewMode === 'preview') && (
+      {activeTab?.fileType !== 'image' && (viewMode === 'split' || viewMode === 'preview') && (
         <div className="pane-prev" style={{ ...(viewMode === 'split' ? { flex: previewFlex } : {}), position: 'relative' }}>
           <div className="prev-outline-toggle">
             <button

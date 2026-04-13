@@ -2,6 +2,9 @@ import { useEditorStore, type ViewMode } from '@/store/editorStore';
 import { useSettingsStore } from '@/store/settingsStore';
 import { useTheme } from '@/hooks/useTheme';
 
+/** File types that only support preview mode (no editor) */
+const PREVIEW_ONLY_FILE_TYPES = new Set(['image', 'pdf']);
+
 const VIEW_MODE_ICONS: Record<ViewMode, React.ReactNode> = {
   split: (
     <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.3">
@@ -33,6 +36,11 @@ export function Topbar() {
   const viewMode = useEditorStore((state) => state.viewMode);
   const setViewMode = useEditorStore((state) => state.setViewMode);
   const toggleAiPanel = useEditorStore((state) => state.toggleAiPanel);
+  const activeTab = useEditorStore((state) => {
+    const tabs = state.tabs;
+    return tabs.find((t) => t.id === state.activeTabId);
+  });
+  const isPreviewOnly = activeTab ? PREVIEW_ONLY_FILE_TYPES.has(activeTab.fileType) : false;
   const setCurrentPage = useSettingsStore((state) => state.setCurrentPage);
   const { theme, toggleTheme } = useTheme();
 
@@ -52,16 +60,20 @@ export function Topbar() {
       <div className="tb-right">
         {/* View mode segment */}
         <div className="view-seg">
-          {VIEW_MODES.map((mode) => (
-            <button
-              key={mode.key}
-              className={`vseg ${viewMode === mode.key ? 'on' : ''}`}
-              onClick={() => setViewMode(mode.key)}
-              title={mode.label}
-            >
-              {VIEW_MODE_ICONS[mode.key]}
-            </button>
-          ))}
+          {VIEW_MODES.map((mode) => {
+            const disabled = isPreviewOnly && mode.key !== 'preview';
+            return (
+              <button
+                key={mode.key}
+                className={`vseg ${isPreviewOnly ? (mode.key === 'preview' ? 'on' : '') : viewMode === mode.key ? 'on' : ''} ${disabled ? 'disabled' : ''}`}
+                onClick={() => !disabled && setViewMode(mode.key)}
+                title={disabled ? `${mode.label}（不可用）` : mode.label}
+                disabled={disabled}
+              >
+                {VIEW_MODE_ICONS[mode.key]}
+              </button>
+            );
+          })}
         </div>
 
         <div className="top-div" />
