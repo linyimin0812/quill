@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState, useCallback } from 'react';
 import { Topbar } from './components/shell/Topbar';
 import { Sidebar } from './components/sidebar/Sidebar';
 import { WorkArea } from './components/shell/WorkArea';
@@ -17,9 +17,35 @@ import { registerBuiltinPlugins } from '@quill/container-plugins';
 // Register all built-in container plugins at app startup
 registerBuiltinPlugins();
 
+/** Hook to detect mobile viewport */
+function useIsMobile(breakpoint = 768) {
+  const [isMobile, setIsMobile] = useState(() =>
+    typeof window !== 'undefined' ? window.innerWidth <= breakpoint : false,
+  );
+  useEffect(() => {
+    const mql = window.matchMedia(`(max-width: ${breakpoint}px)`);
+    const handler = (event: MediaQueryListEvent) => setIsMobile(event.matches);
+    mql.addEventListener('change', handler);
+    setIsMobile(mql.matches);
+    return () => mql.removeEventListener('change', handler);
+  }, [breakpoint]);
+  return isMobile;
+}
+
 export default function App() {
   useTheme();
   useSidecar();
+
+  const isMobile = useIsMobile();
+  const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
+
+  const toggleMobileSidebar = useCallback(() => {
+    setMobileSidebarOpen((prev) => !prev);
+  }, []);
+
+  const closeMobileSidebar = useCallback(() => {
+    setMobileSidebarOpen(false);
+  }, []);
 
   const vaultInitialized = useRef(false);
 
@@ -65,11 +91,17 @@ export default function App() {
 
   return (
     <div className="shell" style={{ '--ui-font-size': `${fontSize}px` } as any}>
-      <Topbar />
+      <Topbar isMobile={isMobile} onToggleSidebar={toggleMobileSidebar} />
 
       {currentPage === 'editor' && (
         <div className="body-row">
-          <Sidebar />
+          {/* Mobile: overlay sidebar drawer */}
+          {isMobile && mobileSidebarOpen && (
+            <div className="mobile-sidebar-overlay" onClick={closeMobileSidebar} />
+          )}
+          <div className={`sidebar-wrapper ${isMobile ? 'mobile' : ''} ${mobileSidebarOpen ? 'open' : ''}`}>
+            <Sidebar onFileSelect={isMobile ? closeMobileSidebar : undefined} />
+          </div>
           <WorkArea />
           {showAiPanel && <AiPanel />}
         </div>
@@ -77,7 +109,12 @@ export default function App() {
 
       {currentPage === 'vault' && (
         <div className="body-row">
-          <Sidebar />
+          {isMobile && mobileSidebarOpen && (
+            <div className="mobile-sidebar-overlay" onClick={closeMobileSidebar} />
+          )}
+          <div className={`sidebar-wrapper ${isMobile ? 'mobile' : ''} ${mobileSidebarOpen ? 'open' : ''}`}>
+            <Sidebar onFileSelect={isMobile ? closeMobileSidebar : undefined} />
+          </div>
           <VaultPage />
         </div>
       )}

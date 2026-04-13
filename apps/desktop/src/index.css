@@ -857,6 +857,17 @@ textarea.fi2 { resize: vertical; line-height: 1.5; }
 
 /* ── Responsive / Mobile Adaptation ── */
 
+/* Sidebar wrapper — desktop: pass-through, mobile: overlay drawer */
+.sidebar-wrapper { display: contents; }
+
+/* Mobile sidebar overlay backdrop */
+.mobile-sidebar-overlay {
+  display: none;
+}
+
+/* Mobile hamburger menu button — hidden on desktop */
+.mobile-menu-btn { display: none !important; }
+
 /* Tablet: <= 1024px */
 @media (max-width: 1024px) {
   .sidebar { width: 200px !important; min-width: 160px; }
@@ -868,64 +879,112 @@ textarea.fi2 { resize: vertical; line-height: 1.5; }
 
 /* Small tablet / large phone: <= 768px */
 @media (max-width: 768px) {
-  .body-row { flex-direction: column; }
+  /* Show hamburger menu */
+  .mobile-menu-btn { display: flex !important; }
 
-  /* Sidebar becomes top drawer */
-  .sidebar {
-    width: 100% !important; height: auto; max-height: 50vh;
-    border-right: none; border-bottom: 1px solid var(--brd);
-    flex-direction: row; flex-wrap: wrap;
+  /* Sidebar wrapper: overlay drawer from left */
+  .sidebar-wrapper {
+    display: block; position: fixed; top: 0; left: 0; bottom: 0;
+    width: 280px; z-index: 100;
+    transform: translateX(-100%);
+    transition: transform .25s ease;
   }
-  .sb-header { width: 100%; padding: 8px; }
-  .sb-body { width: 100%; max-height: 200px; }
+  .sidebar-wrapper.mobile.open {
+    transform: translateX(0);
+  }
+  .sidebar-wrapper .sidebar {
+    width: 100% !important; height: 100%; max-width: none;
+    border-right: 1px solid var(--brd);
+  }
+
+  /* Overlay backdrop */
+  .mobile-sidebar-overlay {
+    display: block; position: fixed; inset: 0; z-index: 99;
+    background: rgba(0,0,0,.4); backdrop-filter: blur(2px);
+    animation: fadeIn .2s;
+  }
+
+  /* Resizer hidden on mobile */
   .resizer { display: none; }
 
-  /* Work area full width */
+  /* Work area: full width, single column */
   .work-area { flex-direction: column; }
-  .pane-src { border-right: none; border-bottom: 1px solid var(--brd); min-height: 40vh; }
-  .pane-prev { min-height: 30vh; }
-
-  /* Outline panel hidden on mobile */
-  .outline-panel { display: none; }
-
-  /* AI panel becomes bottom sheet */
-  .ai-panel {
-    width: 100%; height: 50vh; position: fixed; bottom: 0; left: 0;
-    border-left: none; border-top: 1px solid var(--brd);
-    z-index: 60; box-shadow: 0 -4px 24px rgba(0,0,0,.1);
+  .pane-src {
+    border-right: none; border-bottom: 1px solid var(--brd);
+    min-height: 0; flex: 1;
   }
+  .pane-prev { min-height: 0; flex: 1; }
+
+  /* Outline panel: overlay on mobile */
+  .prev-outline {
+    position: absolute !important; right: 0; top: 0; bottom: 0;
+    z-index: 15; width: 220px !important;
+    box-shadow: -4px 0 16px rgba(0,0,0,.12);
+    border-left: 1px solid var(--brd);
+  }
+  .prev-outline-resizer { display: none; }
+  .prev-outline-toggle { z-index: 20; }
+
+  /* Editor toolbar: horizontal scroll */
+  .ed-tb { overflow-x: auto; flex-wrap: nowrap; -webkit-overflow-scrolling: touch; }
+  .ed-tb::-webkit-scrollbar { display: none; }
+
+  /* File tabs: horizontal scroll instead of hidden */
+  .file-tabs {
+    overflow-x: auto; flex-wrap: nowrap; -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+  }
+  .file-tabs::-webkit-scrollbar { display: none; }
+  .ftab { flex-shrink: 0; }
+
+  /* View mode segment: keep visible but compact */
+  .view-seg { gap: 1px; }
+  .vseg { padding: 4px 6px; }
 
   /* Topbar compact */
-  .topbar { height: 40px; }
-  .file-tabs { display: none; }
-  .view-seg { display: none; }
+  .topbar { height: 42px; padding: 0 8px; }
   .top-div { display: none; }
+  .logo-name { display: none; }
+
+  /* AI panel: bottom sheet on mobile */
+  .ai-panel {
+    width: 100% !important; max-width: 100% !important;
+    height: 50vh; position: fixed; bottom: 0; left: 0; right: 0;
+    border-left: none; border-top: 1px solid var(--brd);
+    z-index: 80; box-shadow: 0 -4px 24px rgba(0,0,0,.15);
+    border-radius: 16px 16px 0 0;
+  }
 
   /* Page content */
   .page-content { padding: 16px; }
   .settings-page, .vault-page { max-width: 100%; }
+
+  /* Image viewer */
+  .image-viewer-inner { padding: 16px; }
+  .image-viewer-inner img { max-height: calc(100vh - 120px); }
+
+  /* Image paste dialog */
+  .img-paste-dialog { width: 95vw; }
+  .img-paste-size-row { flex-wrap: wrap; }
 }
 
 /* Phone: <= 480px */
 @media (max-width: 480px) {
-  .topbar { padding: 0 6px; }
-  .logo span:last-child { display: none; }
+  .topbar { padding: 0 4px; height: 40px; }
   .tb-right { gap: 0; }
-  .tb-btn { width: 26px; height: 26px; font-size: 12px; }
+  .tb-btn { width: 32px; height: 32px; font-size: 13px; }
 
-  .sidebar { max-height: 40vh; }
-  .sb-header { padding: 6px; }
-  .vault-sel { font-size: 11px; padding: 4px 6px; }
+  .sidebar-wrapper { width: 260px; }
 
-  .ed-fn { padding: 4px 10px; font-size: 11px; }
-  .ed-tb { padding: 2px 6px; }
-  .etb-btn { width: 24px; height: 22px; font-size: 10px; }
+  .ed-fn { padding: 4px 8px; font-size: 11px; }
+  .ed-tb { padding: 2px 4px; }
+  .etb-btn { width: 28px; height: 26px; font-size: 11px; }
 
   .status-bar { font-size: 9px; padding: 0 8px; height: 22px; }
 
   .ai-panel { height: 60vh; }
-  .ai-input { font-size: 11px; }
-  .ai-send { width: 28px; height: 28px; font-size: 12px; }
+  .ai-input { font-size: 12px; }
+  .ai-send { width: 32px; height: 32px; font-size: 13px; }
 
   .page-content { padding: 12px; }
   .settings-page { flex-direction: column; }
@@ -935,11 +994,13 @@ textarea.fi2 { resize: vertical; line-height: 1.5; }
 
   .vc-grid { grid-template-columns: 1fr; }
   .vc-wrap { padding: 13px; }
+
+  .img-paste-tabs { flex-wrap: wrap; }
 }
 
 /* Touch-friendly adjustments */
 @media (pointer: coarse) {
-  .ft-item { padding: 8px 12px; min-height: 36px; }
+  .ft-item { padding: 8px 12px; min-height: 40px; }
   .ftab { padding: 0 14px; min-height: 36px; }
   .tb-btn { width: 36px; height: 36px; }
   .etb-btn { width: 32px; height: 30px; }
@@ -955,7 +1016,7 @@ textarea.fi2 { resize: vertical; line-height: 1.5; }
 @supports (padding: env(safe-area-inset-top)) {
   .topbar { padding-top: env(safe-area-inset-top); }
   .status-bar { padding-bottom: env(safe-area-inset-bottom); }
-  .sidebar { padding-left: env(safe-area-inset-left); }
+  .sidebar-wrapper.mobile { padding-left: env(safe-area-inset-left); }
 }
 
 /* ── Dialog / Modal ── */

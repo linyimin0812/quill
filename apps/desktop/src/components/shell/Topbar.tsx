@@ -32,7 +32,12 @@ const VIEW_MODES: { key: ViewMode; label: string }[] = [
   { key: 'preview', label: '预览' },
 ];
 
-export function Topbar() {
+interface TopbarProps {
+  isMobile?: boolean;
+  onToggleSidebar?: () => void;
+}
+
+export function Topbar({ isMobile, onToggleSidebar }: TopbarProps) {
   const viewMode = useEditorStore((state) => state.viewMode);
   const setViewMode = useEditorStore((state) => state.setViewMode);
   const toggleAiPanel = useEditorStore((state) => state.toggleAiPanel);
@@ -46,8 +51,17 @@ export function Topbar() {
 
   return (
     <header className="topbar">
-      {/* Left: Logo */}
+      {/* Left: Logo + mobile menu */}
       <div className="tb-left">
+        {isMobile && (
+          <button className="tb-btn mobile-menu-btn" onClick={onToggleSidebar} title="菜单">
+            <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5">
+              <line x1="2" y1="4" x2="14" y2="4" />
+              <line x1="2" y1="8" x2="14" y2="8" />
+              <line x1="2" y1="12" x2="14" y2="12" />
+            </svg>
+          </button>
+        )}
         <div className="logo" onClick={() => setCurrentPage('editor')}>
           <img src="/quill/quill.svg" alt="Quill" width="24" height="24" style={{ borderRadius: 5 }} />
           <span className="logo-name">

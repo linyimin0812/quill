@@ -9,7 +9,11 @@ const MAX_WIDTH = 380;
 const DEFAULT_WIDTH = 224;
 const COLLAPSE_THRESHOLD = 100;
 
-export function Sidebar(): React.JSX.Element {
+interface SidebarProps {
+  onFileSelect?: () => void;
+}
+
+export function Sidebar({ onFileSelect }: SidebarProps): React.JSX.Element {
   const vaultName = useSettingsStore((state) => state.vaultName);
   const setCurrentPage = useSettingsStore((state) => state.setCurrentPage);
   const activeTabId = useEditorStore((state) => state.activeTabId);
@@ -53,8 +57,9 @@ export function Sidebar(): React.JSX.Element {
   const handleFileClick = useCallback(
     (filePath: string, fileName: string) => {
       openFile(filePath, fileName);
+      onFileSelect?.();
     },
-    [openFile],
+    [openFile, onFileSelect],
   );
 
   /** Expand all parent directories of the active file and scroll it into view */
