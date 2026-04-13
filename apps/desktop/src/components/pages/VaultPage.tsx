@@ -3,6 +3,7 @@ import { useSettingsStore } from '@/store/settingsStore';
 import { useVaultStore } from '@/store/vaultStore';
 import { useEditorStore } from '@/store/editorStore';
 import { CreateVaultDialog } from '../vault/CreateVaultDialog';
+import type { VaultEntry } from '@quill/vault-provider';
 
 function ConfirmDialog({ message, onConfirm, onCancel }: { message: string; onConfirm: () => void; onCancel: () => void }) {
   return (
@@ -58,6 +59,8 @@ export function VaultPage() {
 
   const [showCreateDialog, setShowCreateDialog] = useState(false);
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
+  const [expandedDirs, setExpandedDirs] = useState<Set<string>>(new Set());
+  const [subEntries, setSubEntries] = useState<Record<string, VaultEntry[]>>({});
 
   const handleDeleteVault = useCallback((id: string) => {
     setDeleteConfirmId(id);
@@ -94,6 +97,60 @@ export function VaultPage() {
   const handleFileClick = (filePath: string, fileName: string) => {
     openFile(filePath, fileName);
     setCurrentPage('editor');
+  };
+
+  const handleToggleDir = useCallback(async (dirPath: string) => {
+    const isExpanded = expandedDirs.has(dirPath);
+    setExpandedDirs((prev) => {
+      const next = new Set(prev);
+      if (isExpanded) {
+        next.delete(dirPath);
+      } else {
+        next.add(dirPath);
+      }
+      return next;
+    });
+    if (!isExpanded && !subEntries[dirPath]) {
+      try {
+        const manager = useVaultStore.getState().manager;
+        const entries = await manager.listFiles(dirPath);
+        setSubEntries((prev) => ({ ...prev, [dirPath]: entries }));
+      } catch (err) {
+        console.error('[VaultPage] Failed to load directory:', dirPath, err);
+      }
+    }
+  }, [expandedDirs, subEntries]);
+
+  const renderFileEntries = (entries: VaultEntry[], depth = 0) => {
+    return entries.map((entry) => {
+      const isExpanded = expandedDirs.has(entry.path);
+      const children = subEntries[entry.path] || [];
+      return (
+        <div key={entry.path}>
+          <div
+            className="fe-row"
+            onClick={() => entry.type === 'dir' ? handleToggleDir(entry.path) : handleFileClick(entry.path, entry.name)}
+            style={{ cursor: 'pointer', paddingLeft: `${13 + depth * 16}px` }}
+          >
+            <span className="fe-ri">
+              {entry.type === 'dir' ? (isExpanded ? '📂' : '📁') : '📄'}
+            </span>
+            <span className="fe-rn">{entry.name}</span>
+            <span className="fe-rm">
+              {entry.type === 'dir'
+                ? (isExpanded ? '▾' : '▸')
+                : formatDate(entry.lastModified)}
+            </span>
+          </div>
+          {entry.type === 'dir' && isExpanded && children.length > 0 && renderFileEntries(children, depth + 1)}
+          {entry.type === 'dir' && isExpanded && children.length === 0 && subEntries[entry.path] && (
+            <div className="fe-row" style={{ paddingLeft: `${13 + (depth + 1) * 16}px`, color: 'var(--t3)', fontSize: 11 }}>
+              空文件夹
+            </div>
+          )}
+        </div>
+      );
+    });
   };
 
   return (
@@ -206,22 +263,7 @@ export function VaultPage() {
                   暂无文件，在编辑器中创建新文档
                 </div>
               ) : (
-                fileTree.map((entry) => (
-                  <div
-                    key={entry.path}
-                    className="fe-row"
-                    onClick={() => entry.type === 'file' && handleFileClick(entry.path, entry.name)}
-                    style={{ cursor: entry.type === 'file' ? 'pointer' : 'default' }}
-                  >
-                    <span className="fe-ri">{entry.type === 'dir' ? '📁' : '📄'}</span>
-                    <span className="fe-rn">{entry.name}</span>
-                    <span className="fe-rm">
-                      {entry.type === 'file'
-                        ? formatDate(entry.lastModified)
-                        : ''}
-                    </span>
-                  </div>
-                ))
+                renderFileEntries(fileTree)
               )}
             </div>
           </>

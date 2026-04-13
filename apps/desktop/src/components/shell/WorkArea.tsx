@@ -11,6 +11,24 @@ import { type CodeBlockMenuState } from '@/editor/extensions/CodeBlockExtension'
 import type { ContainerPlugin } from '@quill/container-plugins';
 import type { EditorView } from '@codemirror/view';
 
+interface HeadingItem {
+  level: number;
+  text: string;
+  line: number;
+}
+
+function extractHeadings(content: string): HeadingItem[] {
+  const lines = content.split('\n');
+  const headings: HeadingItem[] = [];
+  lines.forEach((line, index) => {
+    const match = line.match(/^(#{1,6})\s+(.+)/);
+    if (match) {
+      headings.push({ level: match[1].length, text: match[2], line: index + 1 });
+    }
+  });
+  return headings;
+}
+
 /** Insert text wrapping the current selection (e.g. **bold**) */
 function wrapSelection(view: EditorView, before: string, after: string) {
   const { from, to } = view.state.selection.main;
@@ -49,7 +67,13 @@ export function WorkArea() {
   const editorFont = useSettingsStore((s) => s.editorFont);
   const editorFontSize = useSettingsStore((s) => s.editorFontSize);
 
+  const [outlineVisible, setOutlineVisible] = useState(false);
+  const [outlineWidth, setOutlineWidth] = useState(180);
+  const outlineDragging = useRef(false);
+  const prevBodyRef = useRef<HTMLDivElement>(null);
+
   const editorRef = useRef<QuillEditorHandle>(null);
+  const previewScrollLock = useRef(false);
   const [slashMenu, setSlashMenu] = useState<SlashMenuState>({ visible: false, pos: 0, filter: '' });
   const [slashMenuPosition, setSlashMenuPosition] = useState({ top: 0, left: 0 });
   const [codeBlockMenu, setCodeBlockMenu] = useState<CodeBlockMenuState>({ visible: false, triggerPos: 0, blockStart: 0, filter: '', selectedIndex: 0 });
@@ -83,6 +107,69 @@ export function WorkArea() {
       document.removeEventListener('mousemove', handleMouseMove);
       document.removeEventListener('mouseup', handleMouseUp);
     };
+  }, []);
+
+  // Outline resize
+  useEffect(() => {
+    const handleOutlineMove = (e: MouseEvent) => {
+      if (!outlineDragging.current || !prevBodyRef.current) return;
+      const container = prevBodyRef.current.closest('.pane-prev');
+      if (!container) return;
+      const rect = container.getBoundingClientRect();
+      const newWidth = Math.max(120, Math.min(400, rect.right - e.clientX));
+      setOutlineWidth(newWidth);
+    };
+    const handleOutlineUp = () => {
+      if (outlineDragging.current) {
+        outlineDragging.current = false;
+        document.body.style.cursor = '';
+        document.body.style.userSelect = '';
+      }
+    };
+    document.addEventListener('mousemove', handleOutlineMove);
+    document.addEventListener('mouseup', handleOutlineUp);
+    return () => {
+      document.removeEventListener('mousemove', handleOutlineMove);
+      document.removeEventListener('mouseup', handleOutlineUp);
+    };
+  }, []);
+
+  // Scroll sync: editor → preview
+  const handleEditorScrollRatio = useCallback((ratio: number) => {
+    const previewEl = prevBodyRef.current;
+    if (!previewEl || previewScrollLock.current) return;
+    previewScrollLock.current = true;
+    const maxScroll = previewEl.scrollHeight - previewEl.clientHeight;
+    previewEl.scrollTop = ratio * maxScroll;
+    setTimeout(() => { previewScrollLock.current = false; }, 60);
+  }, []);
+
+  // Scroll sync: preview → editor
+  useEffect(() => {
+    if (viewMode !== 'split') return;
+    const previewEl = prevBodyRef.current;
+    if (!previewEl) return;
+
+    const handlePreviewScroll = () => {
+      if (previewScrollLock.current) return;
+      const maxScroll = previewEl.scrollHeight - previewEl.clientHeight;
+      if (maxScroll <= 0) return;
+      const ratio = previewEl.scrollTop / maxScroll;
+      editorRef.current?.setScrollRatio(ratio);
+    };
+
+    previewEl.addEventListener('scroll', handlePreviewScroll, { passive: true });
+    return () => previewEl.removeEventListener('scroll', handlePreviewScroll);
+  }, [viewMode, activeTabId]);
+
+  const scrollToHeading = useCallback((headingText: string) => {
+    const container = prevBodyRef.current;
+    if (!container) return;
+    const headingId = headingText.toLowerCase().replace(/\s+/g, '-').replace(/[^\w\u4e00-\u9fff-]/g, '');
+    const target = container.querySelector(`#${CSS.escape(headingId)}`);
+    if (target) {
+      target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
   }, []);
 
   const getView = useCallback(() => editorRef.current?.getView() ?? null, []);
@@ -256,6 +343,7 @@ export function WorkArea() {
               }}
               onSlashMenuChange={handleSlashMenuChange}
               onCodeBlockMenuChange={handleCodeBlockMenuChange}
+              onScrollRatioChange={handleEditorScrollRatio}
             />
             {/* Slash command menu */}
             <SlashMenu
@@ -290,9 +378,57 @@ export function WorkArea() {
 
       {/* Preview pane */}
       {(viewMode === 'split' || viewMode === 'preview') && (
-        <div className="pane-prev" style={viewMode === 'split' ? { flex: previewFlex } : undefined}>
-          <div className="prev-body">
-            <MarkdownPreview content={activeTab?.content ?? ''} />
+        <div className="pane-prev" style={{ ...(viewMode === 'split' ? { flex: previewFlex } : {}), position: 'relative' }}>
+          <div className="prev-outline-toggle">
+            <button
+              className={`prev-outline-btn ${outlineVisible ? 'on' : ''}`}
+              onClick={() => setOutlineVisible((v) => !v)}
+              title="大纲"
+            >
+              <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.3">
+                <line x1="2" y1="3.5" x2="14" y2="3.5" />
+                <line x1="4" y1="6.5" x2="14" y2="6.5" />
+                <line x1="4" y1="9.5" x2="14" y2="9.5" />
+                <line x1="2" y1="12.5" x2="14" y2="12.5" />
+              </svg>
+            </button>
+          </div>
+          <div className="prev-content-row">
+            <div className="prev-body" ref={prevBodyRef}>
+              <MarkdownPreview content={activeTab?.content ?? ''} />
+            </div>
+            {outlineVisible && (
+              <div className="prev-outline" style={{ width: `${outlineWidth}px` }}>
+                <div
+                  className="prev-outline-resizer"
+                  onMouseDown={() => {
+                    outlineDragging.current = true;
+                    document.body.style.cursor = 'col-resize';
+                    document.body.style.userSelect = 'none';
+                  }}
+                />
+                <div className="prev-outline-header">大纲</div>
+                <div className="prev-outline-body">
+                  {(() => {
+                    const headings = extractHeadings(activeTab?.content ?? '');
+                    if (headings.length === 0) {
+                      return <p className="prev-outline-empty">暂无标题</p>;
+                    }
+                    return headings.map((heading, index) => (
+                      <div
+                        key={index}
+                        className="prev-outline-item"
+                        style={{ paddingLeft: `${8 + (heading.level - 1) * 12}px` }}
+                        title={`Ln ${heading.line}`}
+                        onClick={() => scrollToHeading(heading.text)}
+                      >
+                        {heading.text}
+                      </div>
+                    ));
+                  })()}
+                </div>
+              </div>
+            )}
           </div>
         </div>
       )}

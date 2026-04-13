@@ -29,9 +29,13 @@ function buildComponentMap(): Record<string, React.ComponentType<any>> {
     // Wrapper that adapts hast element props to ContainerProps
     componentMap[plugin.name] = function DirectiveWrapper(props: any) {
       const { children, node, ...rest } = props;
+      // Merge hast node properties to ensure directive attributes like "type" are preserved
+      // (some attributes like "type" may be consumed by rehype as HTML-native props)
+      const nodeProperties = node?.properties ?? {};
+      const mergedAttributes = { ...nodeProperties, ...rest };
       const containerProps: ContainerProps = {
         children,
-        attributes: rest,
+        attributes: mergedAttributes,
         name: plugin.name,
       };
       return createElement(PluginComponent, containerProps);
@@ -41,6 +45,15 @@ function buildComponentMap(): Record<string, React.ComponentType<any>> {
   return componentMap;
 }
 
+/** Recursively extract plain text from React children */
+function extractTextContent(children: any): string {
+  if (typeof children === 'string') return children;
+  if (typeof children === 'number') return String(children);
+  if (Array.isArray(children)) return children.map(extractTextContent).join('');
+  if (children?.props?.children) return extractTextContent(children.props.children);
+  return '';
+}
+
 interface MarkdownPreviewProps {
   content: string;
 }
@@ -48,7 +61,20 @@ interface MarkdownPreviewProps {
 export function MarkdownPreview({ content }: MarkdownPreviewProps) {
   const containerRef = useRef<HTMLDivElement>(null);
 
-  const componentMap = useMemo(() => buildComponentMap(), []);
+  const componentMap = useMemo(() => {
+    const map = buildComponentMap();
+    // Add heading components with auto-generated id anchors for outline navigation
+    const headingLevels = ['h1', 'h2', 'h3', 'h4', 'h5', 'h6'] as const;
+    for (const tag of headingLevels) {
+      map[tag] = function HeadingWithId(props: any) {
+        const { children, ...rest } = props;
+        const textContent = extractTextContent(children);
+        const headingId = textContent.toLowerCase().replace(/\s+/g, '-').replace(/[^\w\u4e00-\u9fff-]/g, '');
+        return createElement(tag, { ...rest, id: headingId }, children);
+      };
+    }
+    return map;
+  }, []);
 
   const reactContent = useMemo(() => {
     try {

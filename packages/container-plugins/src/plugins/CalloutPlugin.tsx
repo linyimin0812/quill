@@ -5,6 +5,7 @@ const CALLOUT_VARIANTS: Record<string, { border: string; bg: string; icon: strin
   warning: { border: '#f39c12', bg: 'rgba(243, 156, 18, 0.08)', icon: '⚠️', label: 'Warning' },
   tip:     { border: '#2ecc71', bg: 'rgba(46, 204, 113, 0.08)', icon: '💡', label: 'Tip' },
   danger:  { border: '#e74c3c', bg: 'rgba(231, 76, 60, 0.08)',  icon: '❌', label: 'Danger' },
+  error:   { border: '#c0392b', bg: 'rgba(192, 57, 43, 0.08)',  icon: '🚫', label: 'Error' },
   note:    { border: '#9b59b6', bg: 'rgba(155, 89, 182, 0.08)', icon: '📝', label: 'Note' },
 };
 
@@ -29,6 +30,7 @@ function CalloutComponent({ children, attributes }: ContainerProps) {
         <span>{variant.icon}</span>
         <span>{title}</span>
       </div>
+      {/* Do not display the type value — only show title above */}
       <div style={{ lineHeight: 1.7, color: 'var(--t2, #3f3f46)' }}>
         {children}
       </div>
@@ -42,6 +44,6 @@ export const calloutPlugin: ContainerPlugin = {
   label: '提示框',
   category: 'layout',
   component: CalloutComponent,
-  template: ':::callout{type="info"}\n在此输入内容\n:::',
-  description: 'info / warning / tip / danger / note',
+  template: ':::callout{type="info" title="提示"}\n在此输入内容\n:::',
+  description: '支持 info / warning / tip / danger / error / note 类型',
 };

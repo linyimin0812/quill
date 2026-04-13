@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { ContainerRegistry } from '@quill/container-plugins';
 import type { ContainerPlugin, ContainerCategory } from '@quill/container-plugins';
 
@@ -20,9 +20,11 @@ interface SlashMenuProps {
 
 export function SlashMenu({ visible, filter, position, onSelect, onClose }: SlashMenuProps) {
   const [activeIndex, setActiveIndex] = useState(0);
+  const [adjustedPosition, setAdjustedPosition] = useState(position);
+  const menuRef = useRef<HTMLDivElement>(null);
   const registry = ContainerRegistry.getInstance();
 
-  const allPlugins = registry.getAll();
+  const allPlugins = registry.getAll().filter((p) => p.name !== 'step' && p.name !== 'tab');
   const filtered = filter
     ? allPlugins.filter(
         (p) =>
@@ -39,43 +41,82 @@ export function SlashMenu({ visible, filter, position, onSelect, onClose }: Slas
     grouped.set(plugin.category, list);
   }
 
-  const flatList = filtered;
+  // Build flat list in the same order as the grouped rendering
+  const flatList: ContainerPlugin[] = [];
+  for (const plugins of grouped.values()) {
+    flatList.push(...plugins);
+  }
 
   useEffect(() => {
     setActiveIndex(0);
   }, [filter]);
+
+  // Adjust position to avoid being clipped at the bottom of the viewport
+  useEffect(() => {
+    if (!visible || !menuRef.current) {
+      setAdjustedPosition(position);
+      return;
+    }
+    requestAnimationFrame(() => {
+      const menu = menuRef.current;
+      if (!menu) return;
+      const menuHeight = menu.offsetHeight;
+      const viewportHeight = window.innerHeight;
+      const spaceBelow = viewportHeight - position.top;
+      if (spaceBelow < menuHeight && position.top > menuHeight) {
+        // Not enough space below, flip above
+        setAdjustedPosition({ top: position.top - menuHeight - 8, left: position.left });
+      } else {
+        setAdjustedPosition(position);
+      }
+    });
+  }, [visible, position, flatList.length]);
 
   const handleKeyDown = useCallback(
     (e: KeyboardEvent) => {
       if (!visible) return;
       if (e.key === 'ArrowDown') {
         e.preventDefault();
+        e.stopPropagation();
         setActiveIndex((prev) => Math.min(prev + 1, flatList.length - 1));
       } else if (e.key === 'ArrowUp') {
         e.preventDefault();
+        e.stopPropagation();
         setActiveIndex((prev) => Math.max(prev - 1, 0));
       } else if (e.key === 'Enter') {
         e.preventDefault();
+        e.stopPropagation();
         if (flatList[activeIndex]) onSelect(flatList[activeIndex]);
       } else if (e.key === 'Escape') {
         e.preventDefault();
+        e.stopPropagation();
         onClose();
       }
     },
     [visible, flatList, activeIndex, onSelect, onClose],
   );
 
+  // Use capture phase to intercept arrow keys before the editor processes them
   useEffect(() => {
-    document.addEventListener('keydown', handleKeyDown);
-    return () => document.removeEventListener('keydown', handleKeyDown);
+    document.addEventListener('keydown', handleKeyDown, true);
+    return () => document.removeEventListener('keydown', handleKeyDown, true);
   }, [handleKeyDown]);
+
+  // Scroll active item into view
+  useEffect(() => {
+    if (!visible || !menuRef.current) return;
+    const activeElement = menuRef.current.querySelector('.slash-menu-item.active');
+    if (activeElement) {
+      activeElement.scrollIntoView({ block: 'nearest' });
+    }
+  }, [activeIndex, visible]);
 
   if (!visible || flatList.length === 0) return null;
 
   let itemIndex = 0;
 
   return (
-    <div className="slash-menu" style={{ top: position.top, left: position.left }}>
+    <div className="slash-menu" ref={menuRef} style={{ top: adjustedPosition.top, left: adjustedPosition.left, maxHeight: '300px', overflowY: 'auto' }}>
       {Array.from(grouped.entries()).map(([category, plugins]) => (
         <div key={category} className="slash-menu-group">
           <div className="slash-menu-category">{CATEGORY_LABELS[category]}</div>

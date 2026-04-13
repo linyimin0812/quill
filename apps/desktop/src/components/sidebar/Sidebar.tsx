@@ -7,6 +7,7 @@ import type { VaultEntry } from '@quill/vault-provider';
 const MIN_WIDTH = 160;
 const MAX_WIDTH = 380;
 const DEFAULT_WIDTH = 224;
+const COLLAPSE_THRESHOLD = 100;
 
 export function Sidebar(): React.JSX.Element {
   const vaultName = useSettingsStore((state) => state.vaultName);
@@ -23,6 +24,7 @@ export function Sidebar(): React.JSX.Element {
   const vaultRenameFile = useVaultStore((state) => state.renameFile);
 
   const [width, setWidth] = useState(DEFAULT_WIDTH);
+  const [collapsed, setCollapsed] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [expandedDirs, setExpandedDirs] = useState<Set<string>>(new Set());
   const [newItemType, setNewItemType] = useState<'file' | 'dir' | null>(null);
@@ -46,12 +48,48 @@ export function Sidebar(): React.JSX.Element {
     }
   }, []);
 
+  const fileTreeRef = useRef<HTMLDivElement>(null);
+
   const handleFileClick = useCallback(
     (filePath: string, fileName: string) => {
       openFile(filePath, fileName);
     },
     [openFile],
   );
+
+  /** Expand all parent directories of the active file and scroll it into view */
+  const locateActiveFile = useCallback(async () => {
+    const activeTab = tabs.find((t) => t.id === activeTabId);
+    if (!activeTab) return;
+
+    const filePath = activeTab.path;
+    // Expand all parent directories
+    const parts = filePath.split('/');
+    const dirsToExpand: string[] = [];
+    for (let i = 1; i < parts.length; i++) {
+      dirsToExpand.push(parts.slice(0, i).join('/'));
+    }
+
+    // Expand directories and load sub-entries
+    setExpandedDirs((prev) => {
+      const next = new Set(prev);
+      for (const dir of dirsToExpand) next.add(dir);
+      return next;
+    });
+    for (const dir of dirsToExpand) {
+      await loadSubEntries(dir);
+    }
+
+    // Scroll to the file element after DOM update
+    requestAnimationFrame(() => {
+      const container = fileTreeRef.current;
+      if (!container) return;
+      const fileElement = container.querySelector(`[data-filepath="${CSS.escape(filePath)}"]`);
+      if (fileElement) {
+        fileElement.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+      }
+    });
+  }, [activeTabId, tabs, loadSubEntries]);
 
   const startNewItem = useCallback((type: 'file' | 'dir', parentDir?: string) => {
     setNewItemType(type);
@@ -133,17 +171,40 @@ export function Sidebar(): React.JSX.Element {
     setRenameValue('');
   }, [renameValue, renamingItem, vaultRenameFile, loadSubEntries]);
 
-  const deleteItem = useCallback(async (itemPath: string, itemType: 'file' | 'dir') => {
+  const closeTab = useEditorStore((state) => state.closeTab);
+
+  const [deleteConfirm, setDeleteConfirm] = useState<{ path: string; type: 'file' | 'dir'; name: string } | null>(null);
+
+  const confirmDelete = useCallback(async () => {
+    if (!deleteConfirm) return;
+    const { path: itemPath, type: itemType } = deleteConfirm;
     if (itemType === 'dir') {
+      const openTabs = useEditorStore.getState().tabs;
+      for (const tab of openTabs) {
+        if (tab.path === itemPath || tab.path.startsWith(itemPath + '/')) {
+          closeTab(tab.id);
+        }
+      }
       await vaultDeleteDir(itemPath);
     } else {
+      const openTabs = useEditorStore.getState().tabs;
+      const matchingTab = openTabs.find((t) => t.path === itemPath);
+      if (matchingTab) {
+        closeTab(matchingTab.id);
+      }
       await vaultDeleteFile(itemPath);
     }
     const parentDir = itemPath.includes('/') ? itemPath.substring(0, itemPath.lastIndexOf('/')) : '';
     if (parentDir) {
       await loadSubEntries(parentDir);
     }
-  }, [vaultDeleteFile, vaultDeleteDir, loadSubEntries]);
+    setDeleteConfirm(null);
+  }, [deleteConfirm, vaultDeleteFile, vaultDeleteDir, loadSubEntries, closeTab]);
+
+  const deleteItem = useCallback((itemPath: string, itemType: 'file' | 'dir') => {
+    const itemName = itemPath.includes('/') ? itemPath.substring(itemPath.lastIndexOf('/') + 1) : itemPath;
+    setDeleteConfirm({ path: itemPath, type: itemType, name: itemName });
+  }, []);
 
   // Drag resize
   const handleMouseDown = useCallback(() => {
@@ -155,8 +216,13 @@ export function Sidebar(): React.JSX.Element {
   useEffect(() => {
     const handleMouseMove = (event: MouseEvent) => {
       if (!isDragging.current) return;
-      const newWidth = Math.min(MAX_WIDTH, Math.max(MIN_WIDTH, event.clientX));
-      setWidth(newWidth);
+      if (event.clientX < COLLAPSE_THRESHOLD) {
+        setCollapsed(true);
+      } else {
+        setCollapsed(false);
+        const newWidth = Math.min(MAX_WIDTH, Math.max(MIN_WIDTH, event.clientX));
+        setWidth(newWidth);
+      }
     };
 
     const handleMouseUp = () => {
@@ -265,6 +331,7 @@ export function Sidebar(): React.JSX.Element {
         return (
           <div
             key={item.path}
+            data-filepath={item.path}
             className={`ft-item ft-file ${isActive ? 'on' : ''}`}
             style={{ paddingLeft: `${12 + depth * 14}px` }}
             onClick={() => !isRenaming && handleFileClick(item.path, item.name)}
@@ -301,16 +368,26 @@ export function Sidebar(): React.JSX.Element {
 
   return (
     <>
-      <aside className="sidebar" style={{ width: `${width}px` }}>
+      {collapsed && (
+        <div className="sidebar-collapsed">
+          <button className="sb-expand-btn" onClick={() => setCollapsed(false)} title="展开文件栏">
+            <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5">
+              <polyline points="6,3 11,8 6,13" />
+            </svg>
+          </button>
+        </div>
+      )}
+      <aside className="sidebar" style={{ width: collapsed ? '0px' : `${width}px`, display: collapsed ? 'none' : undefined }}>
         {/* Vault selector */}
         <div className="sb-header">
+          <div className="sb-header-row">
           <div className="vault-sel" onClick={() => setCurrentPage('vault')}>
             <span className="vs-icon">📁</span>
             <span className="vs-name">{vaultName}</span>
             <span className="vs-arrow">▾</span>
           </div>
 
-          {/* Actions: new file / new folder */}
+          {/* Actions: new file / new folder / locate */}
           <div className="sb-actions">
             <button className="sb-action-btn" onClick={() => startNewItem('file')} title="新建文件">
               <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor"><path d="M9.5 1.1l3.4 3.5.1.4v2h-1V6H8.5L8 5.5V2H3.5l-.5.5v11l.5.5H7v1H3.5l-1.5-1.5v-11l1.5-1.5h5.7l.3.1zM9 2v3h2.9L9 2zm4 12h-1v-3H9v-1h3V7h1v3h3v1h-3v3z"/></svg>
@@ -318,6 +395,10 @@ export function Sidebar(): React.JSX.Element {
             <button className="sb-action-btn" onClick={() => startNewItem('dir')} title="新建文件夹">
               <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor"><path d="M14 4H9.618l-1-2H2a1 1 0 00-1 1v10a1 1 0 001 1h12a1 1 0 001-1V5a1 1 0 00-1-1zm0 9H2V3h6.382l1 2H14v8zM8 7v2H6v1h2v2h1V10h2V9H9V7H8z"/></svg>
             </button>
+            <button className="sb-action-btn" onClick={locateActiveFile} title="定位当前文件">
+              <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.3"><circle cx="8" cy="8" r="6.5"/><line x1="8" y1="1.5" x2="8" y2="6.5"/><line x1="8" y1="9.5" x2="8" y2="14.5"/><line x1="1.5" y1="8" x2="6.5" y2="8"/><line x1="9.5" y1="8" x2="14.5" y2="8"/></svg>
+            </button>
+          </div>
           </div>
 
           {/* Search */}
@@ -351,7 +432,7 @@ export function Sidebar(): React.JSX.Element {
         )}
 
         {/* File tree */}
-        <div className="sb-body">{renderFileTree(fileTree)}</div>
+        <div className="sb-body" ref={fileTreeRef}>{renderFileTree(fileTree)}</div>
 
         {/* Settings button at bottom */}
         <div className="sb-footer">
@@ -367,6 +448,23 @@ export function Sidebar(): React.JSX.Element {
             设置
           </button>
         </div>
+
+        {/* Delete confirmation dialog */}
+        {deleteConfirm && (
+          <div className="delete-confirm-overlay" onClick={() => setDeleteConfirm(null)}>
+            <div className="delete-confirm-dialog" onClick={(e) => e.stopPropagation()}>
+              <div className="delete-confirm-title">确认删除</div>
+              <div className="delete-confirm-msg">
+                确定要删除{deleteConfirm.type === 'dir' ? '文件夹' : '文件'} <strong>{deleteConfirm.name}</strong> 吗？
+                {deleteConfirm.type === 'dir' && <span style={{ display: 'block', marginTop: 4, fontSize: 12, color: 'var(--t3, #71717a)' }}>文件夹内的所有内容也将被删除</span>}
+              </div>
+              <div className="delete-confirm-actions">
+                <button className="delete-confirm-btn cancel" onClick={() => setDeleteConfirm(null)}>取消</button>
+                <button className="delete-confirm-btn danger" onClick={confirmDelete}>删除</button>
+              </div>
+            </div>
+          </div>
+        )}
       </aside>
 
       {/* Resize handle */}

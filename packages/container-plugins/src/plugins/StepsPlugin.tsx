@@ -1,53 +1,43 @@
-import { Children } from 'react';
 import type { ContainerPlugin, ContainerProps } from '../ContainerPlugin';
 
-function StepsComponent({ children }: ContainerProps) {
-  const items = Children.toArray(children);
+/** Single step – renders title + content, number via CSS counter */
+function StepComponent({ children, attributes }: ContainerProps) {
+  const title = attributes?.title || attributes?.label || '';
 
   return (
-    <div className="docmd-steps" style={{
-      position: 'relative',
-      paddingLeft: '3rem',
-      margin: '1.5rem 0',
-      counterReset: 'step-counter 0',
-    }}>
-      {/* Vertical connector line */}
-      <div style={{
-        position: 'absolute',
-        left: '1.15rem',
-        top: '1rem',
-        bottom: '1rem',
-        width: '2px',
-        backgroundColor: 'var(--brd, #e4e4e7)',
-      }} />
-      {items.map((child, index) => (
-        <div key={index} style={{
-          position: 'relative',
-          marginBottom: '2.5rem',
-        }}>
-          {/* Step number */}
-          <span style={{
-            position: 'absolute',
-            left: '-3rem',
-            top: '-0.15rem',
-            fontWeight: 700,
-            fontSize: '2rem',
-            lineHeight: 1,
-            color: 'var(--acc, #068ad5)',
-            zIndex: 1,
-            backgroundColor: 'var(--panel, #fff)',
-            padding: '0 0.25rem',
-          }}>
-            {index + 1}.
-          </span>
-          <div style={{ lineHeight: 1.7, color: 'var(--t2, #3f3f46)' }}>
-            {child}
-          </div>
+    <div className="docmd-step">
+      <span className="docmd-step-number" />
+      {title && (
+        <div style={{ fontWeight: 600, marginBottom: '0.25rem', color: 'var(--t1, #18181b)' }}>
+          {title}
         </div>
-      ))}
+      )}
+      <div style={{ lineHeight: 1.7, color: 'var(--t2, #3f3f46)' }}>
+        {children}
+      </div>
     </div>
   );
 }
+
+/** Steps container – layout wrapper with vertical connector line and CSS counter reset */
+function StepsComponent({ children }: ContainerProps) {
+  return (
+    <div className="docmd-steps">
+      <div className="docmd-steps-line" />
+      {children}
+    </div>
+  );
+}
+
+export const stepPlugin: ContainerPlugin = {
+  name: 'step',
+  icon: '🔢',
+  label: '步骤项',
+  category: 'layout',
+  component: StepComponent,
+  template: ':::step{title="步骤标题"}\n步骤内容\n:::',
+  description: '单个步骤（用在 ::::steps 内部）',
+};
 
 export const stepsPlugin: ContainerPlugin = {
   name: 'steps',
@@ -55,6 +45,6 @@ export const stepsPlugin: ContainerPlugin = {
   label: '步骤',
   category: 'layout',
   component: StepsComponent,
-  template: ':::steps\n**准备工作** 安装依赖和配置环境\n\n**开始实施** 编写核心代码\n\n**完成验证** 运行测试确认结果\n:::',
+  template: '::::steps\n:::step{title="准备工作"}\n安装依赖和配置环境\n:::\n:::step{title="开始实施"}\n编写核心代码\n:::\n:::step{title="完成验证"}\n运行测试确认结果\n:::\n::::',
   description: '编号步骤时间线',
 };

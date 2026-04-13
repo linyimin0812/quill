@@ -49,9 +49,39 @@ interface EditorState {
   openFile: (path: string, name: string) => Promise<void>;
   /** Save the active tab's content to the vault */
   saveFile: (tabId: string) => Promise<void>;
+  /** Restore previously open tabs for the current vault */
+  restoreOpenTabs: () => Promise<void>;
 }
 
 const EDITOR_STORAGE_KEY = 'editor:viewMode';
+
+/** Storage key for open tabs, scoped by vault ID */
+function openTabsStorageKey(vaultId: string): string {
+  return `editor:openTabs:${vaultId}`;
+}
+
+interface PersistedTabInfo {
+  path: string;
+  name: string;
+}
+
+interface PersistedOpenTabs {
+  tabs: PersistedTabInfo[];
+  activeTabPath: string | null;
+}
+
+/** Persist currently open tabs to storage (debounced) */
+let persistTabsTimer: ReturnType<typeof setTimeout> | null = null;
+function persistOpenTabs(vaultId: string, tabs: FileTab[], activeTabId: string | null) {
+  if (persistTabsTimer) clearTimeout(persistTabsTimer);
+  persistTabsTimer = setTimeout(() => {
+    const data: PersistedOpenTabs = {
+      tabs: tabs.map((t) => ({ path: t.path, name: t.name })),
+      activeTabPath: tabs.find((t) => t.id === activeTabId)?.path ?? null,
+    };
+    storageClient.set(openTabsStorageKey(vaultId), data);
+  }, 500);
+}
 
 export const useEditorStore = create<EditorState>()(
     (set, get) => ({
@@ -75,7 +105,7 @@ export const useEditorStore = create<EditorState>()(
           activeTabId: tab.id,
         })),
 
-      closeTab: (tabId) =>
+      closeTab: (tabId) => {
         set((state) => {
           const newTabs = state.tabs.filter((t) => t.id !== tabId);
           const newActiveId =
@@ -83,9 +113,16 @@ export const useEditorStore = create<EditorState>()(
               ? newTabs[newTabs.length - 1]?.id ?? null
               : state.activeTabId;
           return { tabs: newTabs, activeTabId: newActiveId };
-        }),
+        });
+        const vaultId = useVaultStore.getState().activeVaultId;
+        if (vaultId) persistOpenTabs(vaultId, get().tabs, get().activeTabId);
+      },
 
-      setActiveTab: (tabId) => set({ activeTabId: tabId }),
+      setActiveTab: (tabId) => {
+        set({ activeTabId: tabId });
+        const vaultId = useVaultStore.getState().activeVaultId;
+        if (vaultId) persistOpenTabs(vaultId, get().tabs, tabId);
+      },
 
       updateTabContent: (tabId, content) => {
         set((state) => ({
@@ -141,8 +178,48 @@ export const useEditorStore = create<EditorState>()(
             tabs: [...state.tabs, newTab],
             activeTabId: newTab.id,
           }));
+          persistOpenTabs(vaultId, get().tabs, get().activeTabId);
         } catch (err) {
           console.error('[EditorStore] openFile failed:', err);
+        }
+      },
+
+      restoreOpenTabs: async () => {
+        const vaultId = useVaultStore.getState().activeVaultId;
+        if (!vaultId) return;
+        const saved = await storageClient.get<PersistedOpenTabs>(openTabsStorageKey(vaultId));
+        if (!saved || saved.tabs.length === 0) return;
+
+        for (const tabInfo of saved.tabs) {
+          const tabId = `${vaultId}:${tabInfo.path}`;
+          const alreadyOpen = get().tabs.find((t) => t.id === tabId);
+          if (alreadyOpen) continue;
+          try {
+            const content = await useVaultStore.getState().readFile(tabInfo.path);
+            const newTab: FileTab = {
+              id: tabId,
+              name: tabInfo.name,
+              path: tabInfo.path,
+              content,
+              isDirty: false,
+            };
+            set((state) => ({
+              tabs: [...state.tabs, newTab],
+            }));
+          } catch {
+            // File may have been deleted since last session, skip
+          }
+        }
+
+        // Restore active tab
+        if (saved.activeTabPath) {
+          const activeId = `${vaultId}:${saved.activeTabPath}`;
+          const exists = get().tabs.find((t) => t.id === activeId);
+          if (exists) {
+            set({ activeTabId: activeId });
+          }
+        } else if (get().tabs.length > 0 && !get().activeTabId) {
+          set({ activeTabId: get().tabs[0].id });
         }
       },
 

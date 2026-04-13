@@ -22,7 +22,7 @@
 [data-theme="dark"] {
   --bg: #0b0d14; --panel: #0f1219; --surf: #13161f; --surf2: #181c28;
   --hov: #1b1f2e; --act: #1e2438; --brd: #1c2136; --brd2: #252d4a;
-  --t1: #e2e8f8; --t2: #7a87a8; --t3: #404d68; --t4: #272e48;
+  --t1: #e2e8f8; --t2: #9aa5c0; --t3: #6b7a96; --t4: #3a4560;
   --acc: #5b8af5; --acc2: #7c5bf5; --accdim: #131d42; --accglow: rgba(91,138,245,.1);
   --green: #3dd68c; --gdim: #0b2418; --amber: #f5a623; --red: #f06a6a;
   --cyan: #5dd8f5; --purple: #b87cf5; --card: #111420; --inp: #0f1219;
@@ -110,11 +110,26 @@ button { font-family: var(--font-ui); cursor: pointer; border: none; background:
   display: flex; flex-direction: column;
 }
 .sb-header { padding: 12px 10px 8px; flex-shrink: 0; }
+.sb-header-row { display: flex; align-items: center; gap: 4px; min-width: 0; }
+
+.sidebar-collapsed {
+  flex-shrink: 0; display: flex; align-items: flex-start;
+  padding: 10px 4px; border-right: 1px solid var(--brd);
+  background: var(--panel);
+}
+.sb-expand-btn {
+  display: flex; align-items: center; justify-content: center;
+  width: 24px; height: 24px; border-radius: 4px; cursor: pointer;
+  background: transparent; border: none; color: var(--t3);
+  transition: all .14s;
+}
+.sb-expand-btn:hover { background: var(--hov); color: var(--t1); }
 
 .vault-sel {
   display: flex; align-items: center; gap: 6px; padding: 6px 8px;
   border-radius: 5px; cursor: pointer; transition: background .14s;
   font-size: calc(var(--ui-font-size) - 2px); font-weight: 600;
+  min-width: 0; overflow: hidden; flex-shrink: 1;
 }
 .vault-sel:hover { background: var(--hov); }
 .vs-icon { font-size: 14px; }
@@ -122,7 +137,7 @@ button { font-family: var(--font-ui); cursor: pointer; border: none; background:
 .vs-arrow { color: var(--t3); font-size: 10px; }
 
 .sb-actions {
-  display: flex; align-items: center; gap: 2px; margin-top: 6px;
+  display: flex; align-items: center; gap: 2px; margin-left: auto; flex-shrink: 0;
 }
 .sb-action-btn {
   display: flex; align-items: center; justify-content: center;
@@ -164,6 +179,38 @@ button { font-family: var(--font-ui); cursor: pointer; border: none; background:
   font-family: var(--font-ui); transition: all .14s;
 }
 .sb-settings-btn:hover { background: var(--hov); color: var(--t1); }
+
+/* Delete confirmation dialog */
+.delete-confirm-overlay {
+  position: fixed; inset: 0; z-index: 9999;
+  background: rgba(0,0,0,0.35); display: flex; align-items: center; justify-content: center;
+}
+.delete-confirm-dialog {
+  background: var(--panel, #fff); border-radius: 10px; padding: 20px 24px;
+  min-width: 300px; max-width: 400px; box-shadow: 0 8px 32px rgba(0,0,0,0.18);
+  border: 1px solid var(--brd, #e4e4e7);
+}
+.delete-confirm-title {
+  font-size: 15px; font-weight: 600; color: var(--t1, #18181b); margin-bottom: 8px;
+}
+.delete-confirm-msg {
+  font-size: 13px; color: var(--t2, #3f3f46); line-height: 1.6; margin-bottom: 16px;
+}
+.delete-confirm-actions {
+  display: flex; justify-content: flex-end; gap: 8px;
+}
+.delete-confirm-btn {
+  padding: 6px 16px; border-radius: 6px; font-size: 13px; cursor: pointer;
+  border: 1px solid var(--brd, #e4e4e7); font-family: var(--font-ui); transition: all .14s;
+}
+.delete-confirm-btn.cancel {
+  background: var(--panel, #fff); color: var(--t2, #3f3f46);
+}
+.delete-confirm-btn.cancel:hover { background: var(--hov); }
+.delete-confirm-btn.danger {
+  background: #e74c3c; color: #fff; border-color: #e74c3c;
+}
+.delete-confirm-btn.danger:hover { background: #c0392b; border-color: #c0392b; }
 
 /* File tree items */
 .ft-item {
@@ -247,7 +294,7 @@ button { font-family: var(--font-ui); cursor: pointer; border: none; background:
 .etb-div { width: 1px; height: 16px; background: var(--brd); margin: 0 3px; }
 
 .ed-body {
-  flex: 1; overflow: auto; padding: 16px; background: var(--surf);
+  flex: 1; overflow: hidden; display: flex; flex-direction: column; background: var(--surf);
 }
 .ed-code {
   font-family: var(--font-mono); font-size: 13px; line-height: 1.7;
@@ -262,8 +309,58 @@ button { font-family: var(--font-ui); cursor: pointer; border: none; background:
 .pane-prev {
   flex: 1; display: flex; flex-direction: column; overflow: hidden; min-width: 200px;
 }
+.prev-outline-toggle {
+  position: absolute; right: 8px; top: 50%; transform: translateY(-50%);
+  z-index: 10;
+}
+.prev-outline-btn {
+  display: flex; align-items: center; justify-content: center;
+  width: 28px; height: 28px; border-radius: 6px; cursor: pointer;
+  background: var(--panel); border: 1px solid var(--brd); color: var(--t3);
+  transition: all .14s; box-shadow: 0 1px 4px rgba(0,0,0,.08);
+}
+.prev-outline-btn:hover { background: var(--hov); color: var(--t1); border-color: var(--brd2); }
+.prev-outline-btn.on { background: var(--act); color: var(--acc); border-color: var(--acc); }
+.prev-content-row {
+  flex: 1; display: flex; overflow: hidden;
+}
 .prev-body {
-  flex: 1; overflow: auto; padding: 8px 32px;
+  flex: 1; overflow: auto; padding: 8px 32px 80vh;
+}
+.prev-outline {
+  width: 180px; flex-shrink: 0; overflow-y: auto;
+  border-left: 1px solid var(--brd); background: var(--panel);
+  position: relative; display: flex; flex-direction: column;
+}
+.prev-outline-resizer {
+  position: absolute; left: -3px; top: 0; bottom: 0; width: 6px;
+  cursor: col-resize; z-index: 5;
+}
+.prev-outline-header {
+  font-size: 10px; font-weight: 600; color: var(--t3);
+  text-transform: uppercase; letter-spacing: .08em;
+  padding: 12px 14px 8px; border-bottom: 1px solid var(--brd);
+  display: flex; align-items: center; gap: 6px;
+}
+.prev-outline-header::before {
+  content: ''; display: inline-block; width: 3px; height: 10px;
+  background: var(--acc); border-radius: 2px; flex-shrink: 0;
+}
+.prev-outline-body { padding: 8px 6px; flex: 1; overflow-y: auto; }
+.prev-outline-item {
+  font-size: 11.5px; color: var(--t2); padding: 5px 10px;
+  cursor: pointer; transition: all .12s; border-radius: 4px;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  margin: 1px 0; position: relative;
+  border-left: 2px solid transparent;
+}
+.prev-outline-item:hover {
+  background: var(--hov); color: var(--t1);
+  border-left-color: var(--acc);
+}
+.prev-outline-empty {
+  font-size: 11px; color: var(--t3); padding: 20px 12px;
+  text-align: center; line-height: 1.6;
 }
 .prev-placeholder {
   text-align: center; color: var(--t3); font-size: 12px;
@@ -295,7 +392,7 @@ button { font-family: var(--font-ui); cursor: pointer; border: none; background:
 ::-webkit-scrollbar-thumb { background: var(--brd2); border-radius: 2px; }
 
 /* ── CodeMirror ── */
-.cm-wrapper { flex: 1; overflow: auto; }
+.cm-wrapper { flex: 1; overflow: hidden; }
 .cm-wrapper .cm-editor { height: 100%; }
 .cm-wrapper .cm-scroller { overflow: auto; line-height: 1.7; }
 .cm-wrapper .cm-content { padding: 16px 16px 16px 6px; }
@@ -355,7 +452,7 @@ button { font-family: var(--font-ui); cursor: pointer; border: none; background:
   padding: 6px 8px; border-radius: 5px; cursor: pointer;
   transition: background .1s;
 }
-.slash-menu-item:hover, .slash-menu-item.active { background: var(--hov); }
+.slash-menu-item.active { background: var(--hov); }
 .slash-menu-icon { font-size: 16px; width: 24px; text-align: center; flex-shrink: 0; }
 .slash-menu-info { display: flex; flex-direction: column; gap: 1px; }
 .slash-menu-label { font-size: 12px; font-weight: 500; color: var(--t1); }
@@ -602,10 +699,25 @@ button { font-family: var(--font-ui); cursor: pointer; border: none; background:
   color: var(--t2); background: var(--surf); border-radius: 0 6px 6px 0;
 }
 .md-preview ul { padding-left: 24px; margin: 8px 0; list-style-type: disc; }
-.md-preview ol { padding-left: 24px; margin: 8px 0; list-style-type: decimal; }
+.md-preview ol { padding-left: 24px; margin: 8px 0; list-style-type: decimal; counter-reset: list-item; }
 .md-preview li { margin: 4px 0; }
-.md-preview li::marker { color: var(--t3); }
-.md-preview li:has(> input[type="checkbox"]) { list-style-type: none; }
+.md-preview li::marker { color: var(--t1); }
+.md-preview ul.contains-task-list { list-style-type: none; padding-left: 4px; }
+
+/* ── Steps container (CSS counter for numbering) ── */
+.docmd-steps { position: relative; padding-left: 3rem; margin: 1.5rem 0; counter-reset: docmd-step; }
+.docmd-steps-line { position: absolute; left: 1.15rem; top: 1rem; bottom: 1rem; width: 2px; background-color: var(--brd, #e4e4e7); }
+.docmd-step { position: relative; margin-bottom: 2.5rem; counter-increment: docmd-step; }
+.docmd-step-number {
+  position: absolute; left: -2.75rem; top: 0;
+  width: 1.5rem; height: 1.5rem;
+  display: flex; align-items: center; justify-content: center;
+  font-weight: 600; font-size: 0.75rem; line-height: 1;
+  color: var(--t2, #3f3f46); z-index: 1;
+  background-color: var(--surf, #f4f4f5);
+  border: 1px solid var(--brd, #e4e4e7); border-radius: 50%;
+}
+.docmd-step-number::before { content: counter(docmd-step); }
 .md-preview hr { border: none; border-top: 1px solid var(--brd); margin: 20px 0; }
 .md-preview table { border-collapse: collapse; width: 100%; margin: 12px 0; }
 .md-preview th, .md-preview td {

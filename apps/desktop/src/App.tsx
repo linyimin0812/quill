@@ -3,8 +3,8 @@ import { Topbar } from './components/shell/Topbar';
 import { Sidebar } from './components/sidebar/Sidebar';
 import { WorkArea } from './components/shell/WorkArea';
 import { StatusBar } from './components/shell/StatusBar';
-import { OutlinePanel } from './components/outline/OutlinePanel';
 import { AiPanel } from './components/ai/AiPanel';
+
 import { SettingsPage } from './components/pages/SettingsPage';
 import { VaultPage } from './components/pages/VaultPage';
 import { useTheme } from './hooks/useTheme';
@@ -71,7 +71,6 @@ export default function App() {
         <div className="body-row">
           <Sidebar />
           <WorkArea />
-          <OutlinePanel />
           {showAiPanel && <AiPanel />}
         </div>
       )}

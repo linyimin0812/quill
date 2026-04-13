@@ -41,6 +41,7 @@ import {
   codeBlockMenuField,
   type CodeBlockMenuState,
 } from './extensions/CodeBlockExtension';
+import { orderedListExtension } from './extensions/OrderedListPlugin';
 import type { ShortcutItem } from '@/store/settingsStore';
 
 /** Convert display key symbols (⌘, Shift, etc.) to CodeMirror key format (Mod-Shift-s) */
@@ -104,6 +105,8 @@ function buildMarkdownKeymap(
 
 export interface QuillEditorHandle {
   getView: () => EditorView | null;
+  getScrollDOM: () => HTMLElement | null;
+  setScrollRatio: (ratio: number) => void;
 }
 
 interface QuillEditorProps {
@@ -112,10 +115,11 @@ interface QuillEditorProps {
   onSlashMenuChange?: (state: SlashMenuState) => void;
   onCodeBlockMenuChange?: (state: CodeBlockMenuState) => void;
   onSave?: () => void;
+  onScrollRatioChange?: (ratio: number) => void;
 }
 
 export const QuillEditor = forwardRef<QuillEditorHandle, QuillEditorProps>(
-  function QuillEditor({ initialContent = '', onChange, onSlashMenuChange, onCodeBlockMenuChange, onSave }, ref) {
+  function QuillEditor({ initialContent = '', onChange, onSlashMenuChange, onCodeBlockMenuChange, onSave, onScrollRatioChange }, ref) {
     const editorRef = useRef<HTMLDivElement>(null);
     const viewRef = useRef<EditorView | null>(null);
     const tabSizeCompartment = useRef(new Compartment());
@@ -135,9 +139,21 @@ export const QuillEditor = forwardRef<QuillEditorHandle, QuillEditorProps>(
     onCodeBlockMenuChangeRef.current = onCodeBlockMenuChange;
     const onSaveRef = useRef(onSave);
     onSaveRef.current = onSave;
+    const onScrollRatioChangeRef = useRef(onScrollRatioChange);
+    onScrollRatioChangeRef.current = onScrollRatioChange;
+    const scrollSyncLock = useRef(false);
 
     useImperativeHandle(ref, () => ({
       getView: () => viewRef.current,
+      getScrollDOM: () => viewRef.current?.scrollDOM ?? null,
+      setScrollRatio: (ratio: number) => {
+        const scrollEl = viewRef.current?.scrollDOM;
+        if (!scrollEl) return;
+        scrollSyncLock.current = true;
+        const maxScroll = scrollEl.scrollHeight - scrollEl.clientHeight;
+        scrollEl.scrollTop = ratio * maxScroll;
+        setTimeout(() => { scrollSyncLock.current = false; }, 60);
+      },
     }));
 
     const handleUpdate = useCallback(
@@ -211,6 +227,7 @@ export const QuillEditor = forwardRef<QuillEditorHandle, QuillEditorProps>(
           markdown({ base: markdownLanguage, codeLanguages: languages }),
           ...slashCommandExtension,
           ...codeBlockExtension,
+          ...orderedListExtension,
           EditorView.updateListener.of(handleUpdate),
           EditorView.lineWrapping,
         ],
@@ -223,11 +240,23 @@ export const QuillEditor = forwardRef<QuillEditorHandle, QuillEditorProps>(
 
       viewRef.current = view;
 
+      // Scroll sync: listen on cm-scroller (the only scrollable container)
+      const scrollEl = view.scrollDOM;
+      const handleEditorScroll = () => {
+        if (scrollSyncLock.current) return;
+        const maxScroll = scrollEl.scrollHeight - scrollEl.clientHeight;
+        if (maxScroll <= 0) return;
+        const ratio = scrollEl.scrollTop / maxScroll;
+        onScrollRatioChangeRef.current?.(ratio);
+      };
+      scrollEl.addEventListener('scroll', handleEditorScroll, { passive: true });
+
       // Initial word count
       const words = initialContent.trim().split(/\s+/).filter(Boolean).length;
       setWordCount(words);
 
       return () => {
+        scrollEl.removeEventListener('scroll', handleEditorScroll);
         view.destroy();
       };
     }, []);

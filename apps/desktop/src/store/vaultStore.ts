@@ -200,9 +200,10 @@ export const useVaultStore = create<VaultState>()(
             await persistVaultConfigs(get().vaults, config.id);
             await get().refreshFileTree();
 
-            // Clear editor tabs when switching vaults to avoid cross-vault file conflicts
+            // Clear editor tabs when switching vaults, then restore saved tabs for the new vault
             const { useEditorStore } = await import('./editorStore');
             useEditorStore.setState({ tabs: [], activeTabId: null });
+            await useEditorStore.getState().restoreOpenTabs();
           } catch (err) {
             const message = err instanceof Error ? err.message : 'Failed to switch vault';
             set({ error: message });
