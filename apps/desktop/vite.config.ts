@@ -11,16 +11,18 @@ export default defineConfig(async () => ({
       '@': path.resolve(__dirname, './src'),
     },
   },
+  base: '/quill',
   clearScreen: false,
   server: {
     port: 1420,
     strictPort: true,
-    host: host || false,
+    host: host || '0.0.0.0',
+    allowedHosts: true,
     hmr: host
       ? { protocol: 'ws', host, port: 1421 }
       : undefined,
     proxy: {
-      '/quill/': {
+      '/quill/api': {
         target: 'http://localhost:3001',
         changeOrigin: true,
       },

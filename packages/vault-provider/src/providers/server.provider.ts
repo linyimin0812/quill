@@ -22,9 +22,9 @@ export class ServerVaultProvider extends BaseVaultProvider {
   /** Detect API base URL: absolute in Tauri, relative in browser dev */
   private static detectBaseUrl(): string {
     if (typeof window !== 'undefined' && window.location.protocol === 'tauri:') {
-      return 'http://localhost:3001/quill/vault';
+      return 'http://localhost:3001/quill/api/vault';
     }
-    return '/quill/vault';
+    return '/quill/api/vault';
   }
 
   async connect(config: VaultConfig): Promise<void> {

@@ -87,7 +87,7 @@ export const useVaultStore = create<VaultState>()(
           const maxRetries = 15;
           for (let attempt = 1; attempt <= maxRetries; attempt++) {
             try {
-              const response = await fetch(`${apiBase}/quill/storage/health`, { method: 'GET' });
+              const response = await fetch(`${apiBase}/quill/api/storage/health`, { method: 'GET' });
               if (response.ok || response.status === 404) break; // 404 is fine — endpoint exists, server is up
             } catch {
               // Server not ready yet

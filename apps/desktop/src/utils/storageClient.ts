@@ -7,9 +7,9 @@
 /** Detect API base URL: absolute in Tauri, relative in browser dev */
 function getApiBase(): string {
   if (typeof window !== 'undefined' && window.location.protocol === 'tauri:') {
-    return 'http://localhost:3001/quill/storage';
+    return 'http://localhost:3001/quill/api/storage';
   }
-  return '/quill/storage';
+  return '/quill/api/storage';
 }
 
 const BASE = getApiBase();

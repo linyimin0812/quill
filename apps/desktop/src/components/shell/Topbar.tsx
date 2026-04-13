@@ -21,7 +21,7 @@ export function Topbar() {
       {/* Left: Logo */}
       <div className="tb-left">
         <div className="logo" onClick={() => setCurrentPage('editor')}>
-          <img src="/quill.svg" alt="Quill" width="24" height="24" style={{ borderRadius: 5 }} />
+          <img src="/quill/quill.svg" alt="Quill" width="24" height="24" style={{ borderRadius: 5 }} />
           <span className="logo-name">
             Qu<em>ill</em>
           </span>
