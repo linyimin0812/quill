@@ -1,12 +1,15 @@
 import { useRef, useState, useCallback, useEffect } from 'react';
 import { useEditorStore } from '@/store/editorStore';
 import { useSettingsStore } from '@/store/settingsStore';
+import { useVaultStore } from '@/store/vaultStore';
 import { QuillEditor, type QuillEditorHandle } from '@/editor/EditorView';
 import { MarkdownPreview } from '../preview/MarkdownPreview';
 import { SlashMenu } from '../editor/SlashMenu';
 import { CodeBlockLangMenu } from '../editor/CodeBlockLangMenu';
+import { ImagePasteDialog, type ImageSaveConfig } from '../editor/ImagePasteDialog';
 import { hideSlashMenu, type SlashMenuState } from '@/editor/extensions/SlashCommandPlugin';
 import { type CodeBlockMenuState } from '@/editor/extensions/CodeBlockExtension';
+import { getStrategy, fileToBase64, convertImageFormat } from '@/utils/imageUploader';
 import type { ContainerPlugin } from '@quill/container-plugins';
 import type { EditorView } from '@codemirror/view';
 
@@ -77,6 +80,12 @@ export function WorkArea() {
   const [slashMenuPosition, setSlashMenuPosition] = useState({ top: 0, left: 0 });
   const [codeBlockMenu, setCodeBlockMenu] = useState<CodeBlockMenuState>({ visible: false, triggerPos: 0, blockStart: 0, filter: '', selectedIndex: 0 });
   const [codeBlockMenuPosition, setCodeBlockMenuPosition] = useState({ top: 0, left: 0 });
+
+  // Image paste dialog state
+  const [imagePasteVisible, setImagePasteVisible] = useState(false);
+  const [imagePasteFile, setImagePasteFile] = useState<File | null>(null);
+  const [imagePastePreviewUrl, setImagePastePreviewUrl] = useState('');
+  const vaultRoot = useVaultStore((s) => s.currentVault?.basePath ?? '');
 
   // Pane resize (editor vs preview split ratio)
   const [editorFlex, setEditorFlex] = useState(1);
@@ -343,6 +352,11 @@ export function WorkArea() {
               onSlashMenuChange={handleSlashMenuChange}
               onCodeBlockMenuChange={handleCodeBlockMenuChange}
               onScrollRatioChange={handleEditorScrollRatio}
+              onImagePaste={(file, previewUrl) => {
+                setImagePasteFile(file);
+                setImagePastePreviewUrl(previewUrl);
+                setImagePasteVisible(true);
+              }}
             />
             {/* Slash command menu */}
             <SlashMenu
@@ -358,6 +372,53 @@ export function WorkArea() {
               menuState={codeBlockMenu}
               position={codeBlockMenuPosition}
               getView={getView}
+            />
+            {/* Image paste dialog */}
+            <ImagePasteDialog
+              visible={imagePasteVisible}
+              previewUrl={imagePastePreviewUrl}
+              currentFilePath={activeTab?.path ?? ''}
+              vaultRoot={vaultRoot}
+              onConfirm={async (config: ImageSaveConfig) => {
+                if (!imagePasteFile) return;
+                try {
+                  const strategy = getStrategy(config.target);
+                  const originalFormat = imagePasteFile.type.split('/')[1] as string;
+                  const needsConversion = config.format !== originalFormat;
+                  const base64 = needsConversion
+                    ? await convertImageFormat(imagePasteFile, config.format)
+                    : await fileToBase64(imagePasteFile);
+                  const result = await strategy.upload(base64, config, vaultRoot);
+                  // Insert markdown image at cursor
+                  const view = editorRef.current?.getView();
+                  if (view) {
+                    const pos = view.state.selection.main.head;
+                    const hasCustomSize = config.width || config.height;
+                    const encodedUrl = result.markdownUrl.split('/').map(encodeURIComponent).join('/');
+                    const imageMarkdown = hasCustomSize
+                      ? `<img src="${encodedUrl}" alt="${config.fileName}"${config.width ? ` width="${config.width}"` : ''}${config.height ? ` height="${config.height}"` : ''} />`
+                      : `![${config.fileName}](${encodedUrl})`;
+                    view.dispatch({
+                      changes: { from: pos, to: pos, insert: imageMarkdown },
+                      selection: { anchor: pos + imageMarkdown.length },
+                    });
+                    view.focus();
+                  }
+                } catch (error) {
+                  console.error('[ImageUpload] Failed:', error);
+                } finally {
+                  URL.revokeObjectURL(imagePastePreviewUrl);
+                  setImagePasteVisible(false);
+                  setImagePasteFile(null);
+                  setImagePastePreviewUrl('');
+                }
+              }}
+              onCancel={() => {
+                URL.revokeObjectURL(imagePastePreviewUrl);
+                setImagePasteVisible(false);
+                setImagePasteFile(null);
+                setImagePastePreviewUrl('');
+              }}
             />
           </div>
         </div>
@@ -394,7 +455,7 @@ export function WorkArea() {
           </div>
           <div className="prev-content-row">
             <div className="prev-body" ref={prevBodyRef}>
-              <MarkdownPreview content={activeTab?.content ?? ''} />
+              <MarkdownPreview content={activeTab?.content ?? ''} currentFilePath={activeTab?.path ?? ''} vaultRoot={vaultRoot} />
             </div>
             {outlineVisible && (
               <div className="prev-outline" style={{ width: `${outlineWidth}px` }}>

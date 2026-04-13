@@ -201,6 +201,24 @@ export class VaultService {
     }
   }
 
+  // ── Binary File Operations (for image upload) ──
+
+  async uploadBinaryFile(filePath: string, base64Data: string, vaultRoot?: string): Promise<void> {
+    const resolved = this.resolveSafe(filePath, vaultRoot);
+    await fs.mkdir(path.dirname(resolved), { recursive: true });
+    const buffer = Buffer.from(base64Data, 'base64');
+    await fs.writeFile(resolved, buffer);
+  }
+
+  async readBinaryFile(filePath: string, vaultRoot?: string): Promise<Buffer> {
+    const resolved = this.resolveSafe(filePath, vaultRoot);
+    try {
+      return await fs.readFile(resolved);
+    } catch {
+      throw new NotFoundException(`File not found: ${filePath}`);
+    }
+  }
+
   // ── Ping ──
 
   async ping(): Promise<{ ok: boolean; root: string }> {

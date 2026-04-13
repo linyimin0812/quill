@@ -1,0 +1,184 @@
+/** Upload target types */
+export type UploadTarget = 'local' | 'oss' | 'cdn';
+
+/** Result returned after a successful upload */
+export interface ImageUploadResult {
+  /** URL or path to use in Markdown `![](here)` */
+  markdownUrl: string;
+  /** Fully-qualified URL the preview can fetch */
+  previewUrl: string;
+  /** Approximate file size in bytes */
+  fileSize: number;
+}
+
+/** Common config shared by all strategies */
+export interface ImageUploadConfig {
+  fileName: string;
+  format: 'png' | 'jpeg' | 'webp';
+}
+
+/** Config specific to local-server uploads */
+export interface LocalUploadConfig extends ImageUploadConfig {
+  directory: string;
+}
+
+/** Config specific to OSS uploads (reserved) */
+export interface OssUploadConfig extends ImageUploadConfig {
+  bucket: string;
+  pathPrefix: string;
+  region?: string;
+}
+
+/** Config specific to CDN uploads (reserved) */
+export interface CdnUploadConfig extends ImageUploadConfig {
+  cdnDomain: string;
+  pathPrefix: string;
+}
+
+/** Strategy interface – every upload backend implements this */
+export interface ImageUploadStrategy {
+  readonly name: UploadTarget;
+  readonly label: string;
+  readonly icon: string;
+  readonly enabled: boolean;
+
+  upload(imageBase64: string, config: ImageUploadConfig, vaultRoot: string): Promise<ImageUploadResult>;
+}
+
+// ─── Helpers ────────────────────────────────────────────
+
+function getApiBase(): string {
+  if (typeof window !== 'undefined' && window.location.protocol === 'tauri:') {
+    return 'http://localhost:3001';
+  }
+  return '';
+}
+
+// ─── Local Server Strategy ──────────────────────────────
+
+class LocalServerStrategy implements ImageUploadStrategy {
+  readonly name: UploadTarget = 'local';
+  readonly label = '本地服务器';
+  readonly icon = '📁';
+  readonly enabled = true;
+
+  async upload(imageBase64: string, config: ImageUploadConfig, vaultRoot: string): Promise<ImageUploadResult> {
+    const localConfig = config as LocalUploadConfig;
+    const fullPath = `${localConfig.directory}/${localConfig.fileName}.${localConfig.format}`;
+    const apiBase = getApiBase();
+
+    const response = await fetch(`${apiBase}/quill/api/vault/upload`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-vault-root': vaultRoot,
+      },
+      body: JSON.stringify({
+        path: fullPath,
+        base64: imageBase64,
+        mimeType: `image/${localConfig.format}`,
+      }),
+    });
+
+    if (!response.ok) {
+      const errorBody = await response.text();
+      throw new Error(`上传失败: ${errorBody}`);
+    }
+
+    return {
+      markdownUrl: `./${fullPath}`,
+      previewUrl: `${apiBase}/quill/api/vault/image?path=${encodeURIComponent(fullPath)}&root=${encodeURIComponent(vaultRoot)}`,
+      fileSize: Math.ceil(imageBase64.length * 0.75),
+    };
+  }
+}
+
+// ─── OSS Strategy (reserved) ────────────────────────────
+
+class OssStrategy implements ImageUploadStrategy {
+  readonly name: UploadTarget = 'oss';
+  readonly label = 'OSS 云存储';
+  readonly icon = '☁️';
+  readonly enabled = false;
+
+  async upload(): Promise<ImageUploadResult> {
+    throw new Error('OSS 上传暂未实现');
+  }
+}
+
+// ─── CDN Strategy (reserved) ────────────────────────────
+
+class CdnStrategy implements ImageUploadStrategy {
+  readonly name: UploadTarget = 'cdn';
+  readonly label = 'CDN';
+  readonly icon = '🔗';
+  readonly enabled = false;
+
+  async upload(): Promise<ImageUploadResult> {
+    throw new Error('CDN 上传暂未实现');
+  }
+}
+
+// ─── Registry ───────────────────────────────────────────
+
+const uploadStrategies: ImageUploadStrategy[] = [
+  new LocalServerStrategy(),
+  new OssStrategy(),
+  new CdnStrategy(),
+];
+
+export function getStrategy(name: UploadTarget): ImageUploadStrategy {
+  const strategy = uploadStrategies.find((s) => s.name === name);
+  if (!strategy) throw new Error(`Unknown upload target: ${name}`);
+  return strategy;
+}
+
+export function getAllStrategies(): ImageUploadStrategy[] {
+  return uploadStrategies;
+}
+
+// ─── Image conversion helpers ───────────────────────────
+
+/** Convert a File to a base64 string (without the data-url prefix) */
+export function fileToBase64(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => {
+      const result = reader.result as string;
+      resolve(result.split(',')[1]);
+    };
+    reader.onerror = reject;
+    reader.readAsDataURL(file);
+  });
+}
+
+/** Convert an image File to a different format via Canvas, returning base64 */
+export function convertImageFormat(
+  file: File,
+  format: 'png' | 'jpeg' | 'webp',
+  quality = 0.92,
+): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    img.onload = () => {
+      const canvas = document.createElement('canvas');
+      canvas.width = img.width;
+      canvas.height = img.height;
+      const ctx = canvas.getContext('2d');
+      if (!ctx) { reject(new Error('Canvas not supported')); return; }
+      ctx.drawImage(img, 0, 0);
+      const dataUrl = canvas.toDataURL(`image/${format}`, quality);
+      resolve(dataUrl.split(',')[1]);
+      URL.revokeObjectURL(img.src);
+    };
+    img.onerror = () => reject(new Error('Failed to load image'));
+    img.src = URL.createObjectURL(file);
+  });
+}
+
+/** Generate a default file name based on current timestamp */
+export function generateDefaultFileName(): string {
+  const now = new Date();
+  const pad = (n: number) => String(n).padStart(2, '0');
+  return `screenshot-${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}-${pad(now.getHours())}${pad(now.getMinutes())}${pad(now.getSeconds())}`;
+}

@@ -6,6 +6,7 @@ import remarkBreaks from 'remark-breaks';
 import remarkDirective from 'remark-directive';
 import remarkDirectiveRehype from 'remark-directive-rehype';
 import remarkRehype from 'remark-rehype';
+import rehypeRaw from 'rehype-raw';
 import rehypeHighlight from 'rehype-highlight';
 import rehypeReact from 'rehype-react';
 import { jsx, jsxs } from 'react/jsx-runtime';
@@ -56,9 +57,11 @@ function extractTextContent(children: any): string {
 
 interface MarkdownPreviewProps {
   content: string;
+  currentFilePath?: string;
+  vaultRoot?: string;
 }
 
-export function MarkdownPreview({ content }: MarkdownPreviewProps) {
+export function MarkdownPreview({ content, currentFilePath, vaultRoot }: MarkdownPreviewProps) {
   const containerRef = useRef<HTMLDivElement>(null);
 
   const componentMap = useMemo(() => {
@@ -73,8 +76,29 @@ export function MarkdownPreview({ content }: MarkdownPreviewProps) {
         return createElement(tag, { ...rest, id: headingId }, children);
       };
     }
+
+    // Custom img component: resolve vault-relative paths to backend API URLs
+    map['img'] = function VaultImage(props: any) {
+      const { src, alt, node, ...rest } = props;
+      // External URLs and data URIs pass through unchanged
+      if (!src || src.startsWith('http') || src.startsWith('data:')) {
+        return createElement('img', { src, alt, ...rest });
+      }
+      // Strip leading ./ — the path is already relative to vault root
+      // Decode first in case the path is already URL-encoded (e.g. from HTML img tags)
+      const rawPath = src.replace(/^\.\//, '');
+      const imagePath = decodeURIComponent(rawPath);
+      const apiBase = typeof window !== 'undefined' && window.location.protocol === 'tauri:'
+        ? 'http://localhost:3001' : '';
+      let imageUrl = `${apiBase}/quill/api/vault/image?path=${encodeURIComponent(imagePath)}`;
+      if (vaultRoot) {
+        imageUrl += `&root=${encodeURIComponent(vaultRoot)}`;
+      }
+      return createElement('img', { src: imageUrl, alt, loading: 'lazy', ...rest });
+    };
+
     return map;
-  }, []);
+  }, [currentFilePath, vaultRoot]);
 
   const reactContent = useMemo(() => {
     try {
@@ -85,6 +109,7 @@ export function MarkdownPreview({ content }: MarkdownPreviewProps) {
         .use(remarkDirective)
         .use(remarkDirectiveRehype)
         .use(remarkRehype, { allowDangerousHtml: true })
+        .use(rehypeRaw)
         .use(rehypeHighlight, { ignoreMissing: true } as any)
         .use(rehypeReact, {
           jsx,

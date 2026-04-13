@@ -116,10 +116,11 @@ interface QuillEditorProps {
   onCodeBlockMenuChange?: (state: CodeBlockMenuState) => void;
   onSave?: () => void;
   onScrollRatioChange?: (ratio: number) => void;
+  onImagePaste?: (file: File, previewUrl: string) => void;
 }
 
 export const QuillEditor = forwardRef<QuillEditorHandle, QuillEditorProps>(
-  function QuillEditor({ initialContent = '', onChange, onSlashMenuChange, onCodeBlockMenuChange, onSave, onScrollRatioChange }, ref) {
+  function QuillEditor({ initialContent = '', onChange, onSlashMenuChange, onCodeBlockMenuChange, onSave, onScrollRatioChange, onImagePaste }, ref) {
     const editorRef = useRef<HTMLDivElement>(null);
     const viewRef = useRef<EditorView | null>(null);
     const tabSizeCompartment = useRef(new Compartment());
@@ -141,6 +142,8 @@ export const QuillEditor = forwardRef<QuillEditorHandle, QuillEditorProps>(
     onSaveRef.current = onSave;
     const onScrollRatioChangeRef = useRef(onScrollRatioChange);
     onScrollRatioChangeRef.current = onScrollRatioChange;
+    const onImagePasteRef = useRef(onImagePaste);
+    onImagePasteRef.current = onImagePaste;
     const scrollSyncLock = useRef(false);
 
     useImperativeHandle(ref, () => ({
@@ -230,6 +233,24 @@ export const QuillEditor = forwardRef<QuillEditorHandle, QuillEditorProps>(
           ...orderedListExtension,
           EditorView.updateListener.of(handleUpdate),
           EditorView.lineWrapping,
+          EditorView.domEventHandlers({
+            paste(event) {
+              const items = event.clipboardData?.items;
+              if (!items) return false;
+              for (const item of Array.from(items)) {
+                if (item.type.startsWith('image/')) {
+                  event.preventDefault();
+                  const file = item.getAsFile();
+                  if (file) {
+                    const previewUrl = URL.createObjectURL(file);
+                    onImagePasteRef.current?.(file, previewUrl);
+                  }
+                  return true;
+                }
+              }
+              return false;
+            },
+          }),
         ],
       });
 

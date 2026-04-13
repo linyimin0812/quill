@@ -1006,5 +1006,125 @@ textarea.fi2 { resize: vertical; line-height: 1.5; }
   padding: 12px 20px 18px; border-top: 1px solid var(--brd);
 }
 
+/* ── Image Paste Dialog ── */
+.img-paste-overlay {
+  position: fixed; inset: 0; z-index: 200;
+  background: rgba(0,0,0,.45); display: flex; align-items: center; justify-content: center;
+  animation: fadeIn .15s;
+}
+.img-paste-dialog {
+  background: var(--panel); border: 1px solid var(--brd2); border-radius: 12px;
+  box-shadow: 0 16px 48px rgba(0,0,0,.2); width: 520px; max-width: 92vw;
+  animation: slideUp .2s; overflow: hidden;
+}
+.img-paste-header {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 14px 18px; border-bottom: 1px solid var(--brd); font-weight: 600; font-size: 14px;
+}
+.img-paste-close {
+  background: none; border: none; color: var(--t3); cursor: pointer; font-size: 14px; padding: 2px 6px; border-radius: 4px;
+}
+.img-paste-close:hover { background: var(--surf2); color: var(--t1); }
+.img-paste-preview {
+  padding: 16px 18px 8px; display: flex; justify-content: center;
+}
+.img-paste-preview img {
+  max-height: 200px; max-width: 100%; object-fit: contain; border-radius: 6px;
+  border: 1px solid var(--brd); background: var(--surf);
+}
+.img-paste-field { padding: 6px 18px; }
+.img-paste-field label { display: block; font-size: 12px; color: var(--t3); margin-bottom: 4px; font-weight: 500; }
+.img-paste-input {
+  width: 100%; padding: 7px 10px; border: 1px solid var(--brd2); border-radius: 6px;
+  background: var(--surf); color: var(--t1); font-size: 13px; outline: none;
+  box-sizing: border-box;
+}
+.img-paste-input:focus { border-color: var(--acc); box-shadow: 0 0 0 2px var(--accdim); }
+.img-paste-tabs { display: flex; gap: 8px; }
+.img-paste-tab {
+  flex: 1; display: flex; flex-direction: column; align-items: center; gap: 2px;
+  padding: 8px 6px; border: 1.5px solid var(--brd2); border-radius: 8px;
+  background: var(--surf); cursor: pointer; transition: all .15s;
+}
+.img-paste-tab:hover:not(.disabled) { border-color: var(--acc); }
+.img-paste-tab.active { border-color: var(--acc); background: var(--accdim); }
+.img-paste-tab.disabled { opacity: .45; cursor: not-allowed; }
+.img-paste-tab-icon { font-size: 18px; }
+.img-paste-tab-label { font-size: 11px; color: var(--t1); font-weight: 500; }
+.img-paste-tab-badge {
+  font-size: 9px; color: var(--t3); background: var(--surf2); padding: 1px 5px;
+  border-radius: 3px; margin-top: 1px;
+}
+.img-paste-format-group {
+  display: flex; gap: 0; border: 1px solid var(--brd2); border-radius: 6px; overflow: hidden;
+}
+.img-paste-format-btn {
+  flex: 1; padding: 6px 14px; border: none; background: var(--surf);
+  color: var(--t2); font-size: 12px; font-weight: 500; cursor: pointer;
+  transition: all .15s; border-right: 1px solid var(--brd2);
+}
+.img-paste-format-btn:last-child { border-right: none; }
+.img-paste-format-btn:hover { background: var(--hov); color: var(--t1); }
+.img-paste-format-btn.active {
+  background: var(--acc); color: #fff; font-weight: 600;
+}
+.img-paste-size-row {
+  display: flex; align-items: center; gap: 8px;
+}
+.img-paste-size-input-group {
+  display: flex; align-items: center; gap: 4px; flex: 1;
+}
+.img-paste-size-label {
+  font-size: 12px; color: var(--t3); font-weight: 500; flex-shrink: 0;
+}
+.img-paste-size-input {
+  width: 80px !important; flex: 1; text-align: center;
+  -moz-appearance: textfield;
+}
+.img-paste-size-input::-webkit-inner-spin-button,
+.img-paste-size-input::-webkit-outer-spin-button {
+  -webkit-appearance: none; margin: 0;
+}
+.img-paste-size-unit {
+  font-size: 11px; color: var(--t3); flex-shrink: 0;
+}
+.img-paste-lock-btn {
+  background: none; border: 1px solid var(--brd2); border-radius: 6px;
+  width: 32px; height: 32px; display: flex; align-items: center; justify-content: center;
+  cursor: pointer; font-size: 14px; flex-shrink: 0; transition: all .15s;
+}
+.img-paste-lock-btn:hover { border-color: var(--acc); background: var(--hov); }
+.img-paste-lock-btn.locked { border-color: var(--acc); background: var(--accdim); }
+.img-paste-reset-btn {
+  background: none; border: 1px solid var(--brd2); border-radius: 6px;
+  width: 32px; height: 32px; display: flex; align-items: center; justify-content: center;
+  cursor: pointer; font-size: 16px; flex-shrink: 0; color: var(--t2); transition: all .15s;
+}
+.img-paste-reset-btn:hover { border-color: var(--acc); background: var(--hov); color: var(--acc); }
+.img-paste-size-hint {
+  font-size: 11px; color: var(--t3); margin-top: 4px; padding-left: 2px;
+}
+.img-paste-vault-hint {
+  font-size: 11px; color: var(--t3); margin-top: 4px; padding-left: 2px;
+  font-family: var(--font-mono); word-break: break-all;
+}
+.img-paste-path-preview {
+  margin: 8px 18px; padding: 8px 12px; background: var(--surf); border-radius: 6px;
+  font-size: 12px; color: var(--t3); font-family: var(--font-mono);
+  border: 1px dashed var(--brd2); word-break: break-all;
+}
+.img-paste-actions {
+  display: flex; justify-content: flex-end; gap: 8px; padding: 12px 18px 16px;
+  border-top: 1px solid var(--brd); margin-top: 8px;
+}
+.img-paste-btn {
+  padding: 7px 18px; border-radius: 6px; font-size: 13px; font-weight: 500; cursor: pointer; border: none;
+}
+.img-paste-btn.cancel { background: var(--surf2); color: var(--t2); }
+.img-paste-btn.cancel:hover { background: var(--brd); }
+.img-paste-btn.confirm { background: var(--acc); color: #fff; }
+.img-paste-btn.confirm:hover { filter: brightness(1.1); }
+.img-paste-btn.confirm:disabled { opacity: .5; cursor: not-allowed; }
+
 @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
 @keyframes slideUp { from { opacity: 0; transform: translateY(12px); } to { opacity: 1; transform: translateY(0); } }

@@ -92,6 +92,40 @@ export class VaultController {
     return this.vaultService.search(query, vaultRoot);
   }
 
+  // ── Image / Binary Upload ──
+
+  @Post('upload')
+  async uploadFile(
+    @Body() dto: { path: string; base64: string; mimeType: string },
+    @Headers('x-vault-root') vaultRoot: string,
+  ) {
+    await this.vaultService.uploadBinaryFile(dto.path, dto.base64, vaultRoot);
+    return { ok: true, path: dto.path };
+  }
+
+  @Get('image')
+  async getImage(
+    @Query('path') filePath: string,
+    @Query('root') queryRoot: string,
+    @Headers('x-vault-root') headerRoot: string,
+    @Res() res: Response,
+  ) {
+    const vaultRoot = queryRoot || headerRoot;
+    const buffer = await this.vaultService.readBinaryFile(filePath, vaultRoot);
+    const ext = filePath.split('.').pop()?.toLowerCase() ?? '';
+    const mimeMap: Record<string, string> = {
+      png: 'image/png',
+      jpg: 'image/jpeg',
+      jpeg: 'image/jpeg',
+      webp: 'image/webp',
+      gif: 'image/gif',
+      svg: 'image/svg+xml',
+    };
+    res.setHeader('Content-Type', mimeMap[ext] ?? 'application/octet-stream');
+    res.setHeader('Cache-Control', 'public, max-age=3600');
+    res.send(buffer);
+  }
+
   // ── Browse server directories (for vault root selection) ──
 
   @Get('browse')
