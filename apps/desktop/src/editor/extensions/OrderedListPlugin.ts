@@ -108,8 +108,17 @@ const orderedListTransactionFilter = EditorState.transactionFilter.of((tr: Trans
   const renumberChanges = computeRenumberChanges(tr.newDoc, tr.changes);
   if (!renumberChanges) return tr;
 
+  // renumberChanges positions are relative to tr.newDoc, and the second spec
+  // in the returned array is applied sequentially after tr, so coordinates
+  // are already correct. Build a proper ChangeSet from the newDoc length to
+  // ensure CodeMirror applies it correctly.
+  const renumberChangeSet = ChangeSet.of(
+    renumberChanges.map(({ from, to, insert }) => ({ from, to, insert })),
+    tr.newDoc.length,
+  );
+
   return [tr, {
-    changes: renumberChanges,
+    changes: renumberChangeSet,
     annotations: renumberAnnotation.of(true),
   }];
 });

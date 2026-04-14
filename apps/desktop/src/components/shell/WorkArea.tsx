@@ -11,7 +11,7 @@ import { hideSlashMenu, type SlashMenuState } from '@/editor/extensions/SlashCom
 import { type CodeBlockMenuState } from '@/editor/extensions/CodeBlockExtension';
 import { getStrategy, fileToBase64, convertImageFormat } from '@/utils/imageUploader';
 import type { ContainerPlugin } from '@quill/container-plugins';
-import type { EditorView } from '@codemirror/view';
+import { EditorView } from '@codemirror/view';
 
 interface HeadingItem {
   level: number;
@@ -75,7 +75,6 @@ export function WorkArea() {
   const prevBodyRef = useRef<HTMLDivElement>(null);
 
   const editorRef = useRef<QuillEditorHandle>(null);
-  const previewScrollLock = useRef(false);
   const [slashMenu, setSlashMenu] = useState<SlashMenuState>({ visible: false, pos: 0, filter: '' });
   const [slashMenuPosition, setSlashMenuPosition] = useState({ top: 0, left: 0 });
   const [codeBlockMenu, setCodeBlockMenu] = useState<CodeBlockMenuState>({ visible: false, triggerPos: 0, blockStart: 0, filter: '', selectedIndex: 0 });
@@ -142,41 +141,30 @@ export function WorkArea() {
     };
   }, []);
 
-  // Scroll sync: editor → preview
-  const handleEditorScrollRatio = useCallback((ratio: number) => {
-    const previewEl = prevBodyRef.current;
-    if (!previewEl || previewScrollLock.current) return;
-    previewScrollLock.current = true;
-    const maxScroll = previewEl.scrollHeight - previewEl.clientHeight;
-    previewEl.scrollTop = ratio * maxScroll;
-    setTimeout(() => { previewScrollLock.current = false; }, 60);
-  }, []);
-
-  // Scroll sync: preview → editor
-  useEffect(() => {
-    if (viewMode !== 'split') return;
-    const previewEl = prevBodyRef.current;
-    if (!previewEl) return;
-
-    const handlePreviewScroll = () => {
-      if (previewScrollLock.current) return;
-      const maxScroll = previewEl.scrollHeight - previewEl.clientHeight;
-      if (maxScroll <= 0) return;
-      const ratio = previewEl.scrollTop / maxScroll;
-      editorRef.current?.setScrollRatio(ratio);
-    };
-
-    previewEl.addEventListener('scroll', handlePreviewScroll, { passive: true });
-    return () => previewEl.removeEventListener('scroll', handlePreviewScroll);
-  }, [viewMode, activeTabId]);
-
   const scrollToHeading = useCallback((headingText: string) => {
+    // Scroll preview pane to the heading
     const container = prevBodyRef.current;
-    if (!container) return;
-    const headingId = headingText.toLowerCase().replace(/\s+/g, '-').replace(/[^\w\u4e00-\u9fff-]/g, '');
-    const target = container.querySelector(`#${CSS.escape(headingId)}`);
-    if (target) {
-      target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    if (container) {
+      const headingId = headingText.toLowerCase().replace(/\s+/g, '-').replace(/[^\w\u4e00-\u9fff-]/g, '');
+      const target = container.querySelector(`#${CSS.escape(headingId)}`);
+      if (target) {
+        target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      }
+    }
+
+    // Scroll editor to the corresponding heading line
+    const view = editorRef.current?.getView();
+    if (!view) return;
+    const doc = view.state.doc;
+    for (let lineNum = 1; lineNum <= doc.lines; lineNum++) {
+      const line = doc.line(lineNum);
+      const headingMatch = line.text.match(/^(#{1,6})\s+(.*)/);
+      if (headingMatch && headingMatch[2].trim() === headingText.trim()) {
+        view.dispatch({
+          effects: EditorView.scrollIntoView(line.from, { y: 'start' }),
+        });
+        break;
+      }
     }
   }, []);
 
@@ -292,31 +280,37 @@ export function WorkArea() {
 
   return (
     <div className="work-area" ref={splitContainerRef}>
+      {/* File tabs — always visible as a standalone bar */}
+      {tabs.length > 0 && (
+        <div className="file-tabs">
+          {tabs.map((tab) => (
+            <div
+              key={tab.id}
+              className={`ftab ${activeTabId === tab.id ? 'on' : ''}`}
+              onClick={() => setActiveTab(tab.id)}
+            >
+              {tab.isDirty && <span className="ftab-dot" />}
+              <span className="ftab-name">{tab.name}</span>
+              <span
+                className="ftab-x"
+                onClick={(event) => {
+                  event.stopPropagation();
+                  closeTab(tab.id);
+                }}
+              >
+                ✕
+              </span>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* Content area: editor + resizer + preview / image viewer */}
+      <div className="work-area-content">
+
       {/* Editor pane */}
       {activeTab?.fileType !== 'image' && (viewMode === 'split' || viewMode === 'edit') && (
         <div className="pane-src" style={viewMode === 'split' ? { flex: editorFlex } : undefined}>
-          {/* File tabs */}
-          <div className="file-tabs">
-            {tabs.map((tab) => (
-              <div
-                key={tab.id}
-                className={`ftab ${activeTabId === tab.id ? 'on' : ''}`}
-                onClick={() => setActiveTab(tab.id)}
-              >
-                {tab.isDirty && <span className="ftab-dot" />}
-                <span className="ftab-name">{tab.name}</span>
-                <span
-                  className="ftab-x"
-                  onClick={(event) => {
-                    event.stopPropagation();
-                    closeTab(tab.id);
-                  }}
-                >
-                  ✕
-                </span>
-              </div>
-            ))}
-          </div>
           <div className="ed-tb">
             <button className="etb-btn" onClick={() => toolbarAction('h1')} data-tip="一级标题">H1</button>
             <button className="etb-btn" onClick={() => toolbarAction('h2')} data-tip="二级标题">H2</button>
@@ -351,7 +345,6 @@ export function WorkArea() {
               }}
               onSlashMenuChange={handleSlashMenuChange}
               onCodeBlockMenuChange={handleCodeBlockMenuChange}
-              onScrollRatioChange={handleEditorScrollRatio}
               onImagePaste={(file, previewUrl) => {
                 setImagePasteFile(file);
                 setImagePastePreviewUrl(previewUrl);
@@ -515,6 +508,7 @@ export function WorkArea() {
         </div>
       )}
 
+      </div>{/* end .work-area-content */}
     </div>
   );
 }

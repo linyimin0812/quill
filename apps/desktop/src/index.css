@@ -249,7 +249,10 @@ button { font-family: var(--font-ui); cursor: pointer; border: none; background:
 
 /* ── Work Area ── */
 .work-area {
-  flex: 1; display: flex; overflow: hidden; background: var(--bg);
+  flex: 1; display: flex; flex-direction: column; overflow: hidden; background: var(--bg);
+}
+.work-area-content {
+  flex: 1; display: flex; overflow: hidden;
 }
 
 /* Editor pane */
@@ -908,7 +911,7 @@ textarea.fi2 { resize: vertical; line-height: 1.5; }
   .resizer { display: none; }
 
   /* Work area: full width, single column */
-  .work-area { flex-direction: column; }
+  .work-area-content { flex-direction: column; }
   .pane-src {
     border-right: none; border-bottom: 1px solid var(--brd);
     min-height: 0; flex: 1;
