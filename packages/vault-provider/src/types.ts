@@ -23,6 +23,8 @@ export interface VaultEntry {
   size?: number;
   lastModified?: Date;
   etag?: string;
+  /** Nested children for directory entries (populated when using recursive listing) */
+  children?: VaultEntry[];
 }
 
 /** Metadata for a vault entry */

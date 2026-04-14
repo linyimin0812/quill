@@ -49,7 +49,7 @@ export interface VaultProvider {
   deleteFile(path: string): Promise<void>;
 
   /** List files and directories at the given path */
-  listFiles(path: string): Promise<VaultEntry[]>;
+  listFiles(path: string, recursive?: boolean): Promise<VaultEntry[]>;
 
   // ── Directory Operations ──
 

@@ -31,6 +31,26 @@ export function Sidebar({ onFileSelect }: SidebarProps): React.JSX.Element {
   const [collapsed, setCollapsed] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [expandedDirs, setExpandedDirs] = useState<Set<string>>(new Set());
+  const hasAutoExpanded = useRef(false);
+
+  // Auto-expand first 2 levels when fileTree is loaded
+  useEffect(() => {
+    if (hasAutoExpanded.current || fileTree.length === 0) return;
+    hasAutoExpanded.current = true;
+    const dirs = new Set<string>();
+    const collect = (entries: VaultEntry[], depth: number) => {
+      if (depth >= 2) return;
+      for (const entry of entries) {
+        if (entry.type === 'dir') {
+          dirs.add(entry.path);
+          if (entry.children) collect(entry.children, depth + 1);
+        }
+      }
+    };
+    collect(fileTree, 0);
+    if (dirs.size > 0) setExpandedDirs(dirs);
+  }, [fileTree]);
+
   const [newItemType, setNewItemType] = useState<'file' | 'dir' | null>(null);
   const [newItemName, setNewItemName] = useState('');
   const [newItemParent, setNewItemParent] = useState<string | null>(null);
@@ -39,18 +59,6 @@ export function Sidebar({ onFileSelect }: SidebarProps): React.JSX.Element {
   const newItemInputRef = useRef<HTMLInputElement>(null);
   const renameInputRef = useRef<HTMLInputElement>(null);
   const isDragging = useRef(false);
-
-  // Load sub-directory contents when expanding a folder
-  const [subEntries, setSubEntries] = useState<Record<string, VaultEntry[]>>({});
-
-  const loadSubEntries = useCallback(async (dirPath: string) => {
-    try {
-      const entries = await useVaultStore.getState().manager.listFiles(dirPath);
-      setSubEntries((prev) => ({ ...prev, [dirPath]: entries }));
-    } catch (err) {
-      console.error('[Sidebar] loadSubEntries failed:', err);
-    }
-  }, []);
 
   const fileTreeRef = useRef<HTMLDivElement>(null);
 
@@ -75,15 +83,12 @@ export function Sidebar({ onFileSelect }: SidebarProps): React.JSX.Element {
       dirsToExpand.push(parts.slice(0, i).join('/'));
     }
 
-    // Expand directories and load sub-entries
+    // Expand all parent directories
     setExpandedDirs((prev) => {
       const next = new Set(prev);
       for (const dir of dirsToExpand) next.add(dir);
       return next;
     });
-    for (const dir of dirsToExpand) {
-      await loadSubEntries(dir);
-    }
 
     // Scroll to the file element after DOM update
     requestAnimationFrame(() => {
@@ -94,7 +99,7 @@ export function Sidebar({ onFileSelect }: SidebarProps): React.JSX.Element {
         fileElement.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
       }
     });
-  }, [activeTabId, tabs, loadSubEntries]);
+  }, [activeTabId, tabs]);
 
   const startNewItem = useCallback((type: 'file' | 'dir', parentDir?: string) => {
     setNewItemType(type);
@@ -124,7 +129,8 @@ export function Sidebar({ onFileSelect }: SidebarProps): React.JSX.Element {
     if (newItemType === 'dir') {
       await vaultCreateDir(fullPath);
     } else {
-      await vaultCreateFile(fullPath, `# ${finalName}\n`);
+      const defaultContent = '\n'.repeat(10);
+      await vaultCreateFile(fullPath, defaultContent);
     }
 
     setNewItemType(null);
@@ -137,11 +143,7 @@ export function Sidebar({ onFileSelect }: SidebarProps): React.JSX.Element {
       setExpandedDirs((prev) => new Set([...prev, fullPath]));
     }
 
-    // Reload sub-entries for parent
-    if (newItemParent) {
-      await loadSubEntries(newItemParent);
-    }
-  }, [newItemName, newItemType, newItemParent, handleFileClick, vaultCreateFile, vaultCreateDir, loadSubEntries]);
+  }, [newItemName, newItemType, newItemParent, handleFileClick, vaultCreateFile, vaultCreateDir]);
 
   const cancelNewItem = useCallback(() => {
     setNewItemType(null);
@@ -168,13 +170,10 @@ export function Sidebar({ onFileSelect }: SidebarProps): React.JSX.Element {
 
     if (newPath !== oldPath) {
       await vaultRenameFile(oldPath, newPath);
-      if (parentDir) {
-        await loadSubEntries(parentDir);
-      }
     }
     setRenamingItem(null);
     setRenameValue('');
-  }, [renameValue, renamingItem, vaultRenameFile, loadSubEntries]);
+  }, [renameValue, renamingItem, vaultRenameFile]);
 
   const closeTab = useEditorStore((state) => state.closeTab);
 
@@ -199,12 +198,8 @@ export function Sidebar({ onFileSelect }: SidebarProps): React.JSX.Element {
       }
       await vaultDeleteFile(itemPath);
     }
-    const parentDir = itemPath.includes('/') ? itemPath.substring(0, itemPath.lastIndexOf('/')) : '';
-    if (parentDir) {
-      await loadSubEntries(parentDir);
-    }
     setDeleteConfirm(null);
-  }, [deleteConfirm, vaultDeleteFile, vaultDeleteDir, loadSubEntries, closeTab]);
+  }, [deleteConfirm, vaultDeleteFile, vaultDeleteDir, closeTab]);
 
   const deleteItem = useCallback((itemPath: string, itemType: 'file' | 'dir') => {
     const itemName = itemPath.includes('/') ? itemPath.substring(itemPath.lastIndexOf('/') + 1) : itemPath;
@@ -244,33 +239,37 @@ export function Sidebar({ onFileSelect }: SidebarProps): React.JSX.Element {
     };
   }, []);
 
-  const handleToggleDir = useCallback(async (dirPath: string) => {
-    const isExpanded = expandedDirs.has(dirPath);
+  const handleToggleDir = useCallback((dirPath: string) => {
     setExpandedDirs((prev) => {
       const next = new Set(prev);
-      if (isExpanded) {
+      if (prev.has(dirPath)) {
         next.delete(dirPath);
       } else {
         next.add(dirPath);
       }
       return next;
     });
-    if (!isExpanded) {
-      await loadSubEntries(dirPath);
+  }, []);
+
+  /** Check if an entry (or any descendant) matches the search query */
+  const matchesSearch = (entry: VaultEntry, query: string): boolean => {
+    if (entry.name.toLowerCase().includes(query)) return true;
+    if (entry.type === 'dir' && entry.children) {
+      return entry.children.some((child) => matchesSearch(child, query));
     }
-  }, [expandedDirs, loadSubEntries]);
+    return false;
+  };
 
   const renderFileTree = (items: VaultEntry[], depth = 0) => {
+    const lowerQuery = searchQuery.toLowerCase();
     return items
-      .filter((item) =>
-        searchQuery ? item.name.toLowerCase().includes(searchQuery.toLowerCase()) : true,
-      )
+      .filter((item) => !searchQuery || matchesSearch(item, lowerQuery))
       .map((item) => {
         const isRenaming = renamingItem === item.path;
 
         if (item.type === 'dir') {
-          const isExpanded = expandedDirs.has(item.path);
-          const children = subEntries[item.path] || [];
+          const isExpanded = searchQuery ? true : expandedDirs.has(item.path);
+          const children = item.children || [];
           return (
             <div key={item.path}>
               <div
@@ -402,6 +401,9 @@ export function Sidebar({ onFileSelect }: SidebarProps): React.JSX.Element {
             </button>
             <button className="sb-action-btn" onClick={locateActiveFile} title="定位当前文件">
               <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.3"><circle cx="8" cy="8" r="6.5"/><line x1="8" y1="1.5" x2="8" y2="6.5"/><line x1="8" y1="9.5" x2="8" y2="14.5"/><line x1="1.5" y1="8" x2="6.5" y2="8"/><line x1="9.5" y1="8" x2="14.5" y2="8"/></svg>
+            </button>
+            <button className="sb-action-btn" onClick={() => useVaultStore.getState().refreshFileTree()} title="刷新文件树">
+              <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5"><path d="M13.5 8a5.5 5.5 0 01-9.8 3.4M2.5 8a5.5 5.5 0 019.8-3.4"/><polyline points="13.5,3 13.5,6.5 10,6.5"/><polyline points="2.5,13 2.5,9.5 6,9.5"/></svg>
             </button>
           </div>
           </div>

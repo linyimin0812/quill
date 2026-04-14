@@ -9,6 +9,7 @@ export interface VaultEntry {
   type: 'file' | 'dir';
   size?: number;
   lastModified?: string;
+  children?: VaultEntry[];
 }
 
 @Injectable()
@@ -79,7 +80,7 @@ export class VaultService {
 
   // ── Directory Operations ──
 
-  async listFiles(dirPath: string, vaultRoot?: string): Promise<VaultEntry[]> {
+  async listFiles(dirPath: string, vaultRoot?: string, recursive = false): Promise<VaultEntry[]> {
     const root = this.getRoot(vaultRoot);
     await this.ensureDir(root);
     const resolved = this.resolveSafe(dirPath || '.', vaultRoot);
@@ -102,7 +103,11 @@ export class VaultService {
             lastModified: stat.mtime.toISOString(),
           });
         } else if (entry.isDirectory()) {
-          results.push({ path: entryPath, name: entry.name, type: 'dir' });
+          const dirEntry: VaultEntry = { path: entryPath, name: entry.name, type: 'dir' };
+          if (recursive) {
+            dirEntry.children = await this.listFiles(entryPath, vaultRoot, true);
+          }
+          results.push(dirEntry);
         }
       }
 

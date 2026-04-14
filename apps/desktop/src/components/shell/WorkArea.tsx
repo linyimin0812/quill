@@ -62,6 +62,7 @@ export function WorkArea() {
   const closeTab = useEditorStore((state) => state.closeTab);
   const updateTabContent = useEditorStore((state) => state.updateTabContent);
   const markTabDirty = useEditorStore((state) => state.markTabDirty);
+  const isFileLoading = useEditorStore((state) => state.isFileLoading);
   const activeTab = tabs.find((t) => t.id === activeTabId);
   const showLineNumbers = useSettingsStore((s) => s.showLineNumbers);
   const settingsTabSize = useSettingsStore((s) => s.tabSize);
@@ -336,6 +337,11 @@ export function WorkArea() {
           </div>
           )}
           <div className="ed-body">
+            {isFileLoading && (
+              <div className="ed-loading-overlay">
+                <span className="ft-spinner" /> 加载文件中…
+              </div>
+            )}
             <QuillEditor
               key={`${activeTabId}-${showLineNumbers}-${settingsTabSize}-${wrapColumn}-${editorFont}-${editorFontSize}`}
               ref={editorRef}

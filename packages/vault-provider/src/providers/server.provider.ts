@@ -81,10 +81,12 @@ export class ServerVaultProvider extends BaseVaultProvider {
     await this.request(`/file?path=${encodeURIComponent(path)}`, { method: 'DELETE' });
   }
 
-  async listFiles(path: string): Promise<VaultEntry[]> {
-    const response = await this.request(`/list?path=${encodeURIComponent(path)}`);
+  async listFiles(path: string, recursive?: boolean): Promise<VaultEntry[]> {
+    const params = new URLSearchParams({ path });
+    if (recursive) params.set('recursive', 'true');
+    const response = await this.request(`/list?${params.toString()}`);
     const data = await response.json();
-    return (data as RawVaultEntry[]).map(deserializeEntry);
+    return deserializeEntries(data as RawVaultEntry[]);
   }
 
   // ── Directory Operations ──
@@ -154,11 +156,17 @@ interface RawVaultEntry {
   size?: number;
   lastModified?: string;
   etag?: string;
+  children?: RawVaultEntry[];
 }
 
 function deserializeEntry(raw: RawVaultEntry): VaultEntry {
   return {
     ...raw,
     lastModified: raw.lastModified ? new Date(raw.lastModified) : undefined,
+    children: raw.children ? deserializeEntries(raw.children) : undefined,
   };
+}
+
+function deserializeEntries(rawEntries: RawVaultEntry[]): VaultEntry[] {
+  return rawEntries.map(deserializeEntry);
 }

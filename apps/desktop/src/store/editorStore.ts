@@ -47,6 +47,8 @@ interface EditorState {
   cursorCol: number;
   /** Word count of current document */
   wordCount: number;
+  /** Whether a file is currently being loaded */
+  isFileLoading: boolean;
 
   // Actions
   setViewMode: (mode: ViewMode) => void;
@@ -108,6 +110,7 @@ export const useEditorStore = create<EditorState>()(
       cursorLine: 1,
       cursorCol: 1,
       wordCount: 0,
+      isFileLoading: false,
 
       setViewMode: (mode) => {
         set({ viewMode: mode });
@@ -180,6 +183,7 @@ export const useEditorStore = create<EditorState>()(
           set({ activeTabId: existing.id });
           return;
         }
+        set({ isFileLoading: true });
         try {
           const fileType = detectFileType(filePath);
           const content = (fileType === 'text' || fileType === 'code') ? await useVaultStore.getState().readFile(filePath) : '';
@@ -198,6 +202,8 @@ export const useEditorStore = create<EditorState>()(
           persistOpenTabs(vaultId, get().tabs, get().activeTabId);
         } catch (err) {
           console.error('[EditorStore] openFile failed:', err);
+        } finally {
+          set({ isFileLoading: false });
         }
       },
 

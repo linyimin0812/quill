@@ -215,7 +215,7 @@ export const useVaultStore = create<VaultState>()(
 
         refreshFileTree: async () => {
           try {
-            const entries = await get().manager.listFiles('');
+            const entries = await get().manager.listFiles('', true);
             set({ fileTree: entries, error: null });
           } catch (err) {
             const message = err instanceof Error ? err.message : 'Failed to load file tree';

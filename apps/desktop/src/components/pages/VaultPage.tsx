@@ -59,8 +59,21 @@ export function VaultPage() {
 
   const [showCreateDialog, setShowCreateDialog] = useState(false);
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
-  const [expandedDirs, setExpandedDirs] = useState<Set<string>>(new Set());
-  const [subEntries, setSubEntries] = useState<Record<string, VaultEntry[]>>({});
+  const [expandedDirs, setExpandedDirs] = useState<Set<string>>(() => {
+    // Default expand first 3 levels of directories
+    const dirs = new Set<string>();
+    const collect = (entries: VaultEntry[], depth: number) => {
+      if (depth >= 2) return;
+      for (const entry of entries) {
+        if (entry.type === 'dir') {
+          dirs.add(entry.path);
+          if (entry.children) collect(entry.children, depth + 1);
+        }
+      }
+    };
+    collect(fileTree, 0);
+    return dirs;
+  });
 
   const handleDeleteVault = useCallback((id: string) => {
     setDeleteConfirmId(id);
@@ -99,32 +112,22 @@ export function VaultPage() {
     setCurrentPage('editor');
   };
 
-  const handleToggleDir = useCallback(async (dirPath: string) => {
-    const isExpanded = expandedDirs.has(dirPath);
+  const handleToggleDir = useCallback((dirPath: string) => {
     setExpandedDirs((prev) => {
       const next = new Set(prev);
-      if (isExpanded) {
+      if (prev.has(dirPath)) {
         next.delete(dirPath);
       } else {
         next.add(dirPath);
       }
       return next;
     });
-    if (!isExpanded && !subEntries[dirPath]) {
-      try {
-        const manager = useVaultStore.getState().manager;
-        const entries = await manager.listFiles(dirPath);
-        setSubEntries((prev) => ({ ...prev, [dirPath]: entries }));
-      } catch (err) {
-        console.error('[VaultPage] Failed to load directory:', dirPath, err);
-      }
-    }
-  }, [expandedDirs, subEntries]);
+  }, []);
 
   const renderFileEntries = (entries: VaultEntry[], depth = 0) => {
     return entries.map((entry) => {
       const isExpanded = expandedDirs.has(entry.path);
-      const children = subEntries[entry.path] || [];
+      const children = entry.children || [];
       return (
         <div key={entry.path}>
           <div
@@ -143,7 +146,7 @@ export function VaultPage() {
             </span>
           </div>
           {entry.type === 'dir' && isExpanded && children.length > 0 && renderFileEntries(children, depth + 1)}
-          {entry.type === 'dir' && isExpanded && children.length === 0 && subEntries[entry.path] && (
+          {entry.type === 'dir' && isExpanded && children.length === 0 && (
             <div className="fe-row" style={{ paddingLeft: `${13 + (depth + 1) * 16}px`, color: 'var(--t3)', fontSize: 11 }}>
               空文件夹
             </div>
