@@ -20,6 +20,7 @@ import {
   foldGutter,
   indentOnInput,
   indentUnit,
+  LanguageDescription,
 } from '@codemirror/language';
 import {
   autocompletion,
@@ -110,6 +111,7 @@ export interface QuillEditorHandle {
 
 interface QuillEditorProps {
   initialContent?: string;
+  filePath?: string;
   onChange?: (content: string) => void;
   onSlashMenuChange?: (state: SlashMenuState) => void;
   onCodeBlockMenuChange?: (state: CodeBlockMenuState) => void;
@@ -118,11 +120,12 @@ interface QuillEditorProps {
 }
 
 export const QuillEditor = forwardRef<QuillEditorHandle, QuillEditorProps>(
-  function QuillEditor({ initialContent = '', onChange, onSlashMenuChange, onCodeBlockMenuChange, onSave, onImagePaste }, ref) {
+  function QuillEditor({ initialContent = '', filePath = '', onChange, onSlashMenuChange, onCodeBlockMenuChange, onSave, onImagePaste }, ref) {
     const editorRef = useRef<HTMLDivElement>(null);
     const viewRef = useRef<EditorView | null>(null);
     const tabSizeCompartment = useRef(new Compartment());
     const markdownKeymapCompartment = useRef(new Compartment());
+    const langCompartment = useRef(new Compartment());
     const setCursorPosition = useEditorStore((s) => s.setCursorPosition);
     const setWordCount = useEditorStore((s) => s.setWordCount);
     const editorFont = useSettingsStore((s) => s.editorFont);
@@ -176,69 +179,79 @@ export const QuillEditor = forwardRef<QuillEditorHandle, QuillEditorProps>(
     useEffect(() => {
       if (!editorRef.current) return;
 
+      const isMarkdown = !filePath || /\.(md|markdown|mdx)$/i.test(filePath);
+
+      // Common extensions shared by all file types
+      const commonExtensions = [
+        EditorView.theme({
+          '&': { fontSize: `${editorFontSize}px` },
+          '.cm-scroller': { fontFamily: editorFont },
+        }),
+        ...(showLineNumbers ? [lineNumbers()] : []),
+        highlightActiveLineGutter(),
+        history(),
+        foldGutter(),
+        dropCursor(),
+        EditorState.allowMultipleSelections.of(true),
+        tabSizeCompartment.current.of([
+          EditorState.tabSize.of(settingsTabSize),
+          indentUnit.of(' '.repeat(settingsTabSize)),
+        ]),
+        indentOnInput(),
+        syntaxHighlighting(defaultHighlightStyle, { fallback: true }),
+        bracketMatching(),
+        closeBrackets(),
+        autocompletion(),
+        rectangularSelection(),
+        crosshairCursor(),
+        highlightActiveLine(),
+        highlightSelectionMatches(),
+        keymap.of([
+          ...closeBracketsKeymap,
+          ...defaultKeymap,
+          ...searchKeymap,
+          ...historyKeymap,
+          ...completionKeymap,
+          ...lintKeymap,
+          indentWithTab,
+        ]),
+        EditorView.updateListener.of(handleUpdate),
+        langCompartment.current.of([]),
+      ];
+
+      // Markdown-specific extensions
+      const markdownExtensions = isMarkdown ? [
+        markdownKeymapCompartment.current.of(
+          keymap.of(buildMarkdownKeymap(shortcuts, onSaveRef)),
+        ),
+        markdown({ base: markdownLanguage, codeLanguages: languages }),
+        ...slashCommandExtension,
+        ...codeBlockExtension,
+        ...orderedListExtension,
+        EditorView.lineWrapping,
+        EditorView.domEventHandlers({
+          paste(event) {
+            const items = event.clipboardData?.items;
+            if (!items) return false;
+            for (const item of Array.from(items)) {
+              if (item.type.startsWith('image/')) {
+                event.preventDefault();
+                const file = item.getAsFile();
+                if (file) {
+                  const previewUrl = URL.createObjectURL(file);
+                  onImagePasteRef.current?.(file, previewUrl);
+                }
+                return true;
+              }
+            }
+            return false;
+          },
+        }),
+      ] : [];
+
       const state = EditorState.create({
         doc: initialContent,
-        extensions: [
-          EditorView.theme({
-            '&': { fontSize: `${editorFontSize}px` },
-            '.cm-scroller': { fontFamily: editorFont },
-          }),
-          ...(showLineNumbers ? [lineNumbers()] : []),
-          highlightActiveLineGutter(),
-          history(),
-          foldGutter(),
-          dropCursor(),
-          EditorState.allowMultipleSelections.of(true),
-          tabSizeCompartment.current.of([
-            EditorState.tabSize.of(settingsTabSize),
-            indentUnit.of(' '.repeat(settingsTabSize)),
-          ]),
-          indentOnInput(),
-          syntaxHighlighting(defaultHighlightStyle, { fallback: true }),
-          bracketMatching(),
-          closeBrackets(),
-          autocompletion(),
-          rectangularSelection(),
-          crosshairCursor(),
-          highlightActiveLine(),
-          highlightSelectionMatches(),
-          markdownKeymapCompartment.current.of(
-            keymap.of(buildMarkdownKeymap(shortcuts, onSaveRef)),
-          ),
-          keymap.of([
-            ...closeBracketsKeymap,
-            ...defaultKeymap,
-            ...searchKeymap,
-            ...historyKeymap,
-            ...completionKeymap,
-            ...lintKeymap,
-            indentWithTab,
-          ]),
-          markdown({ base: markdownLanguage, codeLanguages: languages }),
-          ...slashCommandExtension,
-          ...codeBlockExtension,
-          ...orderedListExtension,
-          EditorView.updateListener.of(handleUpdate),
-          EditorView.lineWrapping,
-          EditorView.domEventHandlers({
-            paste(event) {
-              const items = event.clipboardData?.items;
-              if (!items) return false;
-              for (const item of Array.from(items)) {
-                if (item.type.startsWith('image/')) {
-                  event.preventDefault();
-                  const file = item.getAsFile();
-                  if (file) {
-                    const previewUrl = URL.createObjectURL(file);
-                    onImagePasteRef.current?.(file, previewUrl);
-                  }
-                  return true;
-                }
-              }
-              return false;
-            },
-          }),
-        ],
+        extensions: [...commonExtensions, ...markdownExtensions],
       });
 
       const view = new EditorView({
@@ -247,6 +260,18 @@ export const QuillEditor = forwardRef<QuillEditorHandle, QuillEditorProps>(
       });
 
       viewRef.current = view;
+
+      // For code files, dynamically load the matching language support
+      if (!isMarkdown && filePath) {
+        const langDesc = LanguageDescription.matchFilename(languages, filePath);
+        if (langDesc) {
+          langDesc.load().then((langSupport) => {
+            view.dispatch({
+              effects: langCompartment.current.reconfigure(langSupport),
+            });
+          });
+        }
+      }
 
       // Initial word count
       const words = initialContent.trim().split(/\s+/).filter(Boolean).length;

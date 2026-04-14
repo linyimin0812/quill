@@ -309,8 +309,10 @@ export function WorkArea() {
       <div className="work-area-content">
 
       {/* Editor pane */}
-      {activeTab?.fileType !== 'image' && (viewMode === 'split' || viewMode === 'edit') && (
-        <div className="pane-src" style={viewMode === 'split' ? { flex: editorFlex } : undefined}>
+      {activeTab?.fileType !== 'image' && (activeTab?.fileType === 'code' || viewMode === 'split' || viewMode === 'edit') && (
+        <div className="pane-src" style={activeTab?.fileType === 'text' && viewMode === 'split' ? { flex: editorFlex } : undefined}>
+          {/* Markdown toolbar — only for markdown files */}
+          {activeTab?.fileType === 'text' && (
           <div className="ed-tb">
             <button className="etb-btn" onClick={() => toolbarAction('h1')} data-tip="一级标题">H1</button>
             <button className="etb-btn" onClick={() => toolbarAction('h2')} data-tip="二级标题">H2</button>
@@ -332,10 +334,12 @@ export function WorkArea() {
             <button className="etb-btn etb-icon" onClick={() => toolbarAction('table')} data-tip="表格">▦</button>
             <button className="etb-btn" onClick={() => toolbarAction('hr')} data-tip="分割线">―</button>
           </div>
+          )}
           <div className="ed-body">
             <QuillEditor
               key={`${activeTabId}-${showLineNumbers}-${settingsTabSize}-${wrapColumn}-${editorFont}-${editorFontSize}`}
               ref={editorRef}
+              filePath={activeTab?.path ?? ''}
               initialContent={activeTab?.content ?? ''}
               onChange={(content) => {
                 if (activeTab) updateTabContent(activeTab.id, content);
@@ -417,8 +421,8 @@ export function WorkArea() {
         </div>
       )}
 
-      {/* Split resizer */}
-      {activeTab?.fileType !== 'image' && viewMode === 'split' && (
+      {/* Split resizer — only for markdown files */}
+      {activeTab?.fileType === 'text' && viewMode === 'split' && (
         <div
           className="split-resizer"
           onMouseDown={() => {
@@ -451,8 +455,8 @@ export function WorkArea() {
         </div>
       )}
 
-      {/* Preview pane */}
-      {activeTab?.fileType !== 'image' && (viewMode === 'split' || viewMode === 'preview') && (
+      {/* Preview pane — only for markdown files */}
+      {activeTab?.fileType === 'text' && (viewMode === 'split' || viewMode === 'preview') && (
         <div className="pane-prev" style={{ ...(viewMode === 'split' ? { flex: previewFlex } : {}), position: 'relative' }}>
           <div className="prev-outline-toggle">
             <button

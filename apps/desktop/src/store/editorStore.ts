@@ -8,16 +8,18 @@ const AUTO_SAVE_DELAY_MS = 1000;
 
 export type ViewMode = 'split' | 'edit' | 'preview';
 
-export type FileType = 'text' | 'image' | 'pdf';
+export type FileType = 'text' | 'image' | 'pdf' | 'code';
 
 const IMAGE_EXTENSIONS = new Set(['png', 'jpg', 'jpeg', 'gif', 'webp', 'svg', 'bmp', 'ico']);
 const PDF_EXTENSIONS = new Set(['pdf']);
+const MARKDOWN_EXTENSIONS = new Set(['md', 'markdown', 'mdx']);
 
 export function detectFileType(filePath: string): FileType {
   const ext = filePath.split('.').pop()?.toLowerCase() ?? '';
   if (IMAGE_EXTENSIONS.has(ext)) return 'image';
   if (PDF_EXTENSIONS.has(ext)) return 'pdf';
-  return 'text';
+  if (MARKDOWN_EXTENSIONS.has(ext)) return 'text';
+  return 'code';
 }
 
 export interface FileTab {
@@ -180,7 +182,7 @@ export const useEditorStore = create<EditorState>()(
         }
         try {
           const fileType = detectFileType(filePath);
-          const content = fileType === 'text' ? await useVaultStore.getState().readFile(filePath) : '';
+          const content = (fileType === 'text' || fileType === 'code') ? await useVaultStore.getState().readFile(filePath) : '';
           const newTab: FileTab = {
             id: tabId,
             name,
@@ -211,7 +213,7 @@ export const useEditorStore = create<EditorState>()(
           if (alreadyOpen) continue;
           try {
             const fileType = detectFileType(tabInfo.path);
-            const content = fileType === 'text' ? await useVaultStore.getState().readFile(tabInfo.path) : '';
+            const content = (fileType === 'text' || fileType === 'code') ? await useVaultStore.getState().readFile(tabInfo.path) : '';
             const newTab: FileTab = {
               id: tabId,
               name: tabInfo.name,
