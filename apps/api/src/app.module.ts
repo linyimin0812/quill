@@ -5,9 +5,10 @@ import { SearchModule } from './modules/search/search.module.js';
 import { AiModule } from './modules/ai/ai.module.js';
 import { SettingsModule } from './modules/settings/settings.module.js';
 import { StorageModule } from './modules/storage/storage.module.js';
+import { AuthModule } from './modules/auth/auth.module.js';
 
 @Module({
-  imports: [VaultModule, SearchModule, AiModule, SettingsModule, StorageModule],
+  imports: [VaultModule, SearchModule, AiModule, SettingsModule, StorageModule, AuthModule],
   controllers: [AppController],
   providers: [],
 })

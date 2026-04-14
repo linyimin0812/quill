@@ -4,6 +4,7 @@ import { Sidebar } from './components/sidebar/Sidebar';
 import { WorkArea } from './components/shell/WorkArea';
 import { StatusBar } from './components/shell/StatusBar';
 import { AiPanel } from './components/ai/AiPanel';
+import { LockScreen } from './components/auth/LockScreen';
 
 import { SettingsPage } from './components/pages/SettingsPage';
 import { VaultPage } from './components/pages/VaultPage';
@@ -13,6 +14,7 @@ import { useSettingsStore } from './store/settingsStore';
 import { useVaultStore } from './store/vaultStore';
 import { useEditorStore } from './store/editorStore';
 import { registerBuiltinPlugins } from '@quill/container-plugins';
+import { checkAuthStatus, getAuthToken, setAuthToken, getApiRoot } from './utils/authToken';
 
 // Register all built-in container plugins at app startup
 registerBuiltinPlugins();
@@ -47,16 +49,68 @@ export default function App() {
     setMobileSidebarOpen(false);
   }, []);
 
+  const currentPage = useSettingsStore((state) => state.currentPage);
+  const showAiPanel = useSettingsStore((state) => state.showAiPanel);
+  const showStatusBar = useSettingsStore((state) => state.showStatusBar);
+  const fontSize = useSettingsStore((state) => state.fontSize);
+
+  // ── Auth: check if password protection is enabled ──
+  const [authState, setAuthState] = useState<'checking' | 'locked' | 'unlocked'>('checking');
+  const locked = authState === 'locked';
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function checkAuth() {
+      try {
+        const status = await checkAuthStatus();
+        if (cancelled) return;
+
+        if (!status.enabled || !status.hasToken) {
+          setAuthState('unlocked');
+          return;
+        }
+
+        const existingToken = getAuthToken();
+        if (!existingToken) {
+          setAuthState('locked');
+          return;
+        }
+
+        const response = await fetch(`${getApiRoot()}/auth/verify`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ token: existingToken }),
+        });
+
+        if (!cancelled) {
+          setAuthState(response.ok ? 'unlocked' : 'locked');
+        }
+      } catch {
+        if (!cancelled) setAuthState('locked');
+      }
+    }
+
+    checkAuth();
+    return () => { cancelled = true; };
+  }, []);
+
+  const handleUnlock = useCallback((token: string) => {
+    setAuthToken(token);
+    setAuthState('unlocked');
+  }, []);
+
+  // ── Vault initialization: wait until auth is resolved ──
   const vaultInitialized = useRef(false);
 
   useEffect(() => {
+    if (authState !== 'unlocked') return;
     if (vaultInitialized.current) return;
     vaultInitialized.current = true;
 
     const initializeVault = async () => {
       await useVaultStore.getState().initVault();
 
-      // Auto-open the first file when entering editor for the first time
       const { fileTree } = useVaultStore.getState();
       const { tabs } = useEditorStore.getState();
       if (tabs.length === 0 && fileTree.length > 0) {
@@ -67,9 +121,9 @@ export default function App() {
       }
     };
     initializeVault();
-  }, []);
+  }, [authState]);
 
-  // Global Ctrl+S / Cmd+S to save the active tab
+  // ── Global Ctrl+S / Cmd+S ──
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if ((e.ctrlKey || e.metaKey) && e.key === 's') {
@@ -84,13 +138,14 @@ export default function App() {
     return () => document.removeEventListener('keydown', handleKeyDown);
   }, []);
 
-  const currentPage = useSettingsStore((state) => state.currentPage);
-  const showAiPanel = useSettingsStore((state) => state.showAiPanel);
-  const showStatusBar = useSettingsStore((state) => state.showStatusBar);
-  const fontSize = useSettingsStore((state) => state.fontSize);
-
   return (
-    <div className="shell" style={{ '--ui-font-size': `${fontSize}px` } as any}>
+    <div className={`shell ${locked ? 'locked' : ''}`} style={{ '--ui-font-size': `${fontSize}px` } as any}>
+      {locked && (
+        <LockScreen
+          apiBase={getApiRoot()}
+          onUnlock={handleUnlock}
+        />
+      )}
       <Topbar isMobile={isMobile} onToggleSidebar={toggleMobileSidebar} />
 
       {currentPage === 'editor' && (

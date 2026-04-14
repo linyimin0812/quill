@@ -3,6 +3,18 @@ import type { VaultCapabilities, VaultConfig, VaultEntry } from '../types';
 import { VaultError } from '../types';
 
 /**
+ * Retrieve the auth token from sessionStorage (if available).
+ * This keeps vault-provider decoupled from the desktop app's authToken module
+ * while still allowing authenticated requests when running in a browser.
+ */
+function getSessionAuthToken(): string | null {
+  if (typeof sessionStorage !== 'undefined') {
+    return sessionStorage.getItem('quill:auth-token');
+  }
+  return null;
+}
+
+/**
  * Server vault provider that communicates with a NestJS backend via REST API.
  * Used when Quill runs as a web app deployed on a server — files are stored
  * on the server's file system and accessed through HTTP endpoints.
@@ -40,7 +52,10 @@ export class ServerVaultProvider extends BaseVaultProvider {
 
   async ping(): Promise<boolean> {
     try {
-      const response = await fetch(`${this.baseUrl}/ping`);
+      const headers: Record<string, string> = {};
+      const token = getSessionAuthToken();
+      if (token) headers['Authorization'] = `Bearer ${token}`;
+      const response = await fetch(`${this.baseUrl}/ping`, { headers });
       return response.ok;
     } catch {
       return false;
@@ -109,6 +124,10 @@ export class ServerVaultProvider extends BaseVaultProvider {
     const headers = new Headers(options?.headers);
     if (this.vaultBasePath) {
       headers.set('X-Vault-Root', this.vaultBasePath);
+    }
+    const token = getSessionAuthToken();
+    if (token) {
+      headers.set('Authorization', `Bearer ${token}`);
     }
     const response = await fetch(url, { ...options, headers }).catch(() => {
       throw new VaultError('NETWORK_ERROR', `Failed to reach ${url}`);

@@ -1,9 +1,16 @@
 import { Controller, Get, Put, Delete, Param, Body, Query } from '@nestjs/common';
 import { StorageService } from './storage.service.js';
+import { Public } from '../auth/auth.guard.js';
 
 @Controller('storage')
 export class StorageController {
   constructor(private readonly storageService: StorageService) {}
+
+  @Public()
+  @Get('health')
+  health() {
+    return { status: 'ok' };
+  }
 
   @Get()
   async list(@Query('prefix') prefix?: string) {

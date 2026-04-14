@@ -3,6 +3,7 @@
  * All configuration data (vault configs, editor prefs, settings) is
  * persisted through this client instead of localStorage.
  */
+import { authHeaders } from './authToken';
 
 /** Detect API base URL: absolute in Tauri, relative in browser dev */
 function getApiBase(): string {
@@ -18,7 +19,9 @@ export const storageClient = {
   /** Get a typed value by key. Returns null if not found. */
   async get<T>(key: string): Promise<T | null> {
     try {
-      const response = await fetch(`${BASE}/${encodeURIComponent(key)}`);
+      const response = await fetch(`${BASE}/${encodeURIComponent(key)}`, {
+        headers: authHeaders(),
+      });
       if (!response.ok) return null;
       const { value } = await response.json();
       if (value === null || value === undefined) return null;
@@ -34,7 +37,7 @@ export const storageClient = {
     try {
       await fetch(`${BASE}/${encodeURIComponent(key)}`, {
         method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
+        headers: authHeaders({ 'Content-Type': 'application/json' }),
         body: JSON.stringify({ value: JSON.stringify(data) }),
       });
     } catch {
@@ -45,7 +48,10 @@ export const storageClient = {
   /** Delete a key. */
   async remove(key: string): Promise<void> {
     try {
-      await fetch(`${BASE}/${encodeURIComponent(key)}`, { method: 'DELETE' });
+      await fetch(`${BASE}/${encodeURIComponent(key)}`, {
+        method: 'DELETE',
+        headers: authHeaders(),
+      });
     } catch {
       console.warn(`[storageClient] Failed to remove key: ${key}`);
     }

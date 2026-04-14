@@ -1,6 +1,7 @@
 import { Controller, Get, Post, Put, Delete, Body, Query, Headers, Res } from '@nestjs/common';
 import { Response } from 'express';
 import { VaultService } from './vault.service.js';
+import { Public } from '../auth/auth.guard.js';
 
 @Controller('vault')
 export class VaultController {
@@ -8,6 +9,7 @@ export class VaultController {
 
   // ── Ping ──
 
+  @Public()
   @Get('ping')
   async ping() {
     return this.vaultService.ping();
@@ -103,6 +105,7 @@ export class VaultController {
     return { ok: true, path: dto.path };
   }
 
+  @Public()
   @Get('image')
   async getImage(
     @Query('path') filePath: string,

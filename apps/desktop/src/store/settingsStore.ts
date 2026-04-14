@@ -3,7 +3,7 @@ import { storageClient } from '@/utils/storageClient';
 
 export type Theme = 'light' | 'dark' | 'system';
 export type AppPage = 'editor' | 'vault' | 'settings';
-export type SettingsTab = 'appearance' | 'editor' | 'shortcuts' | 'vault' | 'sync' | 'llm' | 'prompt' | 'about';
+export type SettingsTab = 'appearance' | 'editor' | 'shortcuts' | 'vault' | 'sync' | 'llm' | 'prompt' | 'security' | 'about';
 export type LlmProvider = 'anthropic' | 'openai' | 'google' | 'xai' | 'mistral' | 'groq' | 'openrouter' | 'local';
 
 export interface ShortcutItem {
