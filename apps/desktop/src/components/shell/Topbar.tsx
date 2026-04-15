@@ -1,9 +1,13 @@
 import { useEditorStore, type ViewMode } from '@/store/editorStore';
 import { useSettingsStore } from '@/store/settingsStore';
 import { useTheme } from '@/hooks/useTheme';
+import { ExportMenu } from '@/components/editor/ExportMenu';
 
 /** File types that only support preview mode (no editor) */
 const PREVIEW_ONLY_FILE_TYPES = new Set(['image', 'pdf']);
+
+/** File types where view mode switching is not applicable */
+const HIDE_VIEW_MODE_FILE_TYPES = new Set(['image', 'pdf', 'code']);
 
 const VIEW_MODE_ICONS: Record<ViewMode, React.ReactNode> = {
   split: (
@@ -46,6 +50,7 @@ export function Topbar({ isMobile, onToggleSidebar }: TopbarProps) {
     return tabs.find((t) => t.id === state.activeTabId);
   });
   const isPreviewOnly = activeTab ? PREVIEW_ONLY_FILE_TYPES.has(activeTab.fileType) : false;
+  const hideViewMode = activeTab ? HIDE_VIEW_MODE_FILE_TYPES.has(activeTab.fileType) : false;
   const setCurrentPage = useSettingsStore((state) => state.setCurrentPage);
   const { theme, toggleTheme } = useTheme();
 
@@ -72,7 +77,8 @@ export function Topbar({ isMobile, onToggleSidebar }: TopbarProps) {
 
       {/* Right: View mode + Action buttons */}
       <div className="tb-right">
-        {/* View mode segment */}
+        {/* View mode segment — hidden for non-markdown file types */}
+        {!hideViewMode && (
         <div className="view-seg">
           {VIEW_MODES.map((mode) => {
             const disabled = isPreviewOnly && mode.key !== 'preview';
@@ -89,18 +95,14 @@ export function Topbar({ isMobile, onToggleSidebar }: TopbarProps) {
             );
           })}
         </div>
+        )}
 
         <div className="top-div" />
 
         <button className="tb-btn" onClick={toggleAiPanel} title="AI 面板">
           ✦
         </button>
-        <button className="tb-btn" title="导出">
-          <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.3">
-            <path d="M8 2v8" /><path d="M4.5 5.5L8 2l3.5 3.5" />
-            <path d="M2.5 10v2.5a1 1 0 001 1h9a1 1 0 001-1V10" />
-          </svg>
-        </button>
+        <ExportMenu />
         <button className="tb-btn" onClick={toggleTheme} title="切换主题">
           {theme === 'light' ? (
             <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.3">

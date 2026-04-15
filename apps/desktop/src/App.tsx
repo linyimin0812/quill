@@ -111,6 +111,10 @@ export default function App() {
     const initializeVault = async () => {
       await useVaultStore.getState().initVault();
 
+      // Restore previously opened tabs from last session
+      await useEditorStore.getState().restoreOpenTabs();
+
+      // If no tabs were restored, open the first file as fallback
       const { fileTree } = useVaultStore.getState();
       const { tabs } = useEditorStore.getState();
       if (tabs.length === 0 && fileTree.length > 0) {

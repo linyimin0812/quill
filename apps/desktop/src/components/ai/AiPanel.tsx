@@ -3,15 +3,6 @@ import { useEditorStore } from '@/store/editorStore';
 import { useAiStore } from '@/store/aiStore';
 import { useAiStream } from '@/hooks/useAiStream';
 
-const QUICK_ACTIONS = [
-  { label: '✨ 润色', prompt: '请润色以下文字，使其更加流畅优美：', mode: 'agent' as const },
-  { label: '🌐 翻译', prompt: '请将以下内容翻译为英文：', mode: 'agent' as const },
-  { label: '📝 续写', prompt: '请根据以下内容继续写作：', mode: 'agent' as const },
-  { label: '📋 摘要', prompt: '请总结以下内容的要点：', mode: 'agent' as const },
-  { label: '🔄 改写', prompt: '请改写以下内容，使其更加简洁：', mode: 'agent' as const },
-  { label: '📑 大纲', prompt: '请为以下主题生成文章大纲：', mode: 'agent' as const },
-];
-
 export function AiPanel() {
   const aiPanelVisible = useEditorStore((s) => s.aiPanelVisible);
   const toggleAiPanel = useEditorStore((s) => s.toggleAiPanel);
@@ -77,11 +68,6 @@ export function AiPanel() {
     }
   };
 
-  const handleQuickAction = (prompt: string, mode: 'chat' | 'agent' = 'agent') => {
-    if (isStreaming) return;
-    send(prompt, mode);
-  };
-
   return (
     <div className="ai-panel" style={{ width: `${panelWidth}px` }}>
       <div className="ai-resizer" onMouseDown={handleResizeStart} />
@@ -115,23 +101,6 @@ export function AiPanel() {
           <div className="ai-chips">
             <button className={`chip ${chatMode === 'chat' ? 'on' : ''}`} onClick={() => setChatMode('chat')}>💬 对话</button>
             <button className={`chip ${chatMode === 'agent' ? 'on' : ''}`} onClick={() => setChatMode('agent')}>🤖 Agent</button>
-          </div>
-        </div>
-
-        {/* Quick actions */}
-        <div className="ai-quick">
-          <span className="ai-ctx-lbl">快捷操作</span>
-          <div className="ai-qgrid">
-            {QUICK_ACTIONS.map((action) => (
-              <button
-                key={action.label}
-                className="qbtn"
-                onClick={() => handleQuickAction(action.prompt, action.mode)}
-                disabled={isStreaming}
-              >
-                {action.label}
-              </button>
-            ))}
           </div>
         </div>
 

@@ -42,7 +42,7 @@ button { font-family: var(--font-ui); cursor: pointer; border: none; background:
   height: 44px; flex-shrink: 0;
   background: var(--panel); border-bottom: 1px solid var(--brd);
   display: flex; align-items: center; justify-content: space-between;
-  padding: 0 10px; gap: 3px; z-index: 50; overflow: hidden;
+  padding: 0 10px; gap: 3px; z-index: 50;
 }
 .tb-left { display: flex; align-items: center; height: 100%; flex: 1; overflow: hidden; }
 .tb-right { display: flex; align-items: center; gap: 2px; flex-shrink: 0; }

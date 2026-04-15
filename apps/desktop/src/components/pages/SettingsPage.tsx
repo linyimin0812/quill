@@ -610,7 +610,7 @@ export function SettingsPage() {
         {settingsTab === 'about' && (
           <div className="ss-sec">
             <div style={{ display: 'flex', alignItems: 'center', gap: 13, marginBottom: 16 }}>
-              <div style={{ fontSize: 36 }}>✦</div>
+              <img src="/quill/quill.svg" alt="Quill" width="48" height="48" style={{ borderRadius: 5 }} />
               <div>
                 <div style={{ fontSize: 20, fontWeight: 700, color: 'var(--t1)', letterSpacing: '-.02em' }}>Quill<span style={{ color: 'var(--acc)' }}>.</span></div>
                 <div style={{ fontSize: 11, color: 'var(--t3)', marginTop: 2, fontFamily: 'var(--font-mono)' }}>v0.1.0-alpha · Local-first Markdown Editor</div>
