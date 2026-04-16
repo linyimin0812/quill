@@ -10,6 +10,7 @@ import { ImagePasteDialog, type ImageSaveConfig } from '../editor/ImagePasteDial
 import { hideSlashMenu, type SlashMenuState } from '@/editor/extensions/SlashCommandPlugin';
 import { type CodeBlockMenuState } from '@/editor/extensions/CodeBlockExtension';
 import { getStrategy, fileToBase64, convertImageFormat } from '@/utils/imageUploader';
+import { getSidecarOrigin, isTauri } from '@/utils/platform';
 import type { ContainerPlugin } from '@quill/container-plugins';
 import { EditorView } from '@codemirror/view';
 
@@ -86,6 +87,115 @@ export function WorkArea() {
   const [imagePasteFile, setImagePasteFile] = useState<File | null>(null);
   const [imagePastePreviewUrl, setImagePastePreviewUrl] = useState('');
   const vaultRoot = useVaultStore((s) => s.currentVault?.basePath ?? '');
+
+  // Web viewer: embedded Tauri Webview management
+  const webViewerRef = useRef<HTMLDivElement>(null);
+  const webviewInstances = useRef<Map<string, any>>(new Map());
+
+  // Sync a webview's position/size to match the web-viewer-body container
+  const syncWebviewPosition = useCallback(async (webview: any) => {
+    const container = webViewerRef.current;
+    if (!container || !webview) return;
+    try {
+      const rect = container.getBoundingClientRect();
+      if (rect.width === 0 || rect.height === 0) return;
+      const { LogicalPosition, LogicalSize } = await import('@tauri-apps/api/dpi');
+      await webview.setPosition(new LogicalPosition(rect.left, rect.top));
+      await webview.setSize(new LogicalSize(rect.width, rect.height));
+    } catch {}
+  }, []);
+
+  // Create / destroy / show-hide embedded webviews based on active tab
+  useEffect(() => {
+    if (!isTauri()) return;
+    const isWebTab = activeTab?.fileType === 'web';
+    const tabId = activeTab?.id;
+    const url = activeTab?.path;
+
+    // Hide all webviews that are not the active one
+    (async () => {
+      try {
+        const { LogicalPosition } = await import('@tauri-apps/api/dpi');
+        for (const [id, wv] of webviewInstances.current.entries()) {
+          if (id !== tabId) {
+            try { await wv.setPosition(new LogicalPosition(-10000, -10000)); } catch {}
+          }
+        }
+      } catch {}
+    })();
+
+    if (!isWebTab || !tabId || !url) return;
+
+    const existing = webviewInstances.current.get(tabId);
+    if (existing) {
+      requestAnimationFrame(() => syncWebviewPosition(existing));
+      return;
+    }
+
+    // Create new webview — delay to ensure the container is visible and has layout
+    const createTimer = setTimeout(async () => {
+      try {
+        const { getCurrentWindow } = await import('@tauri-apps/api/window');
+        const { Webview } = await import('@tauri-apps/api/webview');
+        const container = webViewerRef.current;
+        if (!container) return;
+        const rect = container.getBoundingClientRect();
+        if (rect.width === 0 || rect.height === 0) return;
+        const label = `wv-${Date.now()}`;
+        const webview = new Webview(getCurrentWindow(), label, {
+          url,
+          x: Math.round(rect.left),
+          y: Math.round(rect.top),
+          width: Math.round(rect.width),
+          height: Math.round(rect.height),
+        });
+        webview.once('tauri://error', (e: any) => {
+          console.error('[WorkArea] Webview creation error:', e);
+        });
+        webviewInstances.current.set(tabId, webview);
+      } catch (error) {
+        console.error('[WorkArea] Failed to create embedded webview:', error);
+      }
+    }, 150);
+
+    return () => clearTimeout(createTimer);
+  }, [activeTab?.id, activeTab?.fileType, activeTab?.path, syncWebviewPosition]);
+
+  // ResizeObserver to keep webview in sync with container
+  useEffect(() => {
+    if (!isTauri()) return;
+    const container = webViewerRef.current;
+    if (!container) return;
+    const observer = new ResizeObserver(() => {
+      if (activeTab?.fileType !== 'web' || !activeTab?.id) return;
+      const wv = webviewInstances.current.get(activeTab.id);
+      if (wv) syncWebviewPosition(wv);
+    });
+    observer.observe(container);
+    return () => observer.disconnect();
+  }, [activeTab?.id, activeTab?.fileType, syncWebviewPosition]);
+
+  // Clean up webviews when tabs are closed
+  useEffect(() => {
+    const openTabIds = new Set(tabs.filter((t) => t.fileType === 'web').map((t) => t.id));
+    for (const [id, wv] of webviewInstances.current.entries()) {
+      if (!openTabIds.has(id)) {
+        try { wv.close(); } catch {}
+        webviewInstances.current.delete(id);
+      }
+    }
+  }, [tabs]);
+
+  // Clean up all webviews when WorkArea unmounts (e.g. switching to settings page)
+  useEffect(() => {
+    const instances = webviewInstances.current;
+    return () => {
+      for (const [, wv] of instances.entries()) {
+        try { wv.close(); } catch {}
+      }
+      instances.clear();
+    };
+  }, []);
 
   // Pane resize (editor vs preview split ratio)
   const [editorFlex, setEditorFlex] = useState(1);
@@ -291,6 +401,7 @@ export function WorkArea() {
               onClick={() => setActiveTab(tab.id)}
             >
               {tab.isDirty && <span className="ftab-dot" />}
+              {tab.fileType === 'web' && <span className="ftab-icon">🌐</span>}
               <span className="ftab-name">{tab.name}</span>
               <span
                 className="ftab-x"
@@ -310,7 +421,7 @@ export function WorkArea() {
       <div className="work-area-content">
 
       {/* Editor pane */}
-      {activeTab?.fileType !== 'image' && (activeTab?.fileType === 'code' || viewMode === 'split' || viewMode === 'edit') && (
+      {activeTab?.fileType !== 'image' && activeTab?.fileType !== 'web' && (activeTab?.fileType === 'code' || viewMode === 'split' || viewMode === 'edit') && (
         <div className="pane-src" style={activeTab?.fileType === 'text' && viewMode === 'split' ? { flex: editorFlex } : undefined}>
           {/* Markdown toolbar — only for markdown files */}
           {activeTab?.fileType === 'text' && (
@@ -446,8 +557,7 @@ export function WorkArea() {
             <img
               src={(() => {
                 const imagePath = activeTab.path;
-                const apiBase = typeof window !== 'undefined' && window.location.protocol === 'tauri:'
-                  ? 'http://localhost:3001' : '';
+                const apiBase = getSidecarOrigin();
                 let url = `${apiBase}/quill/api/vault/image?path=${encodeURIComponent(imagePath)}`;
                 if (vaultRoot) url += `&root=${encodeURIComponent(vaultRoot)}`;
                 return url;
@@ -460,6 +570,38 @@ export function WorkArea() {
           </div>
         </div>
       )}
+
+
+      {/* Web viewer — embedded Tauri Webview placeholder */}
+      <div
+        className="web-viewer-container"
+        style={{ display: activeTab?.fileType === 'web' ? 'flex' : 'none' }}
+      >
+        <div className="web-viewer-bar">
+          <span className="web-viewer-url" title={activeTab?.path}>🌐 {activeTab?.fileType === 'web' ? activeTab.path : ''}</span>
+          <button
+            className="web-viewer-open-btn"
+            title="在外部浏览器打开"
+            onClick={() => {
+              if (!activeTab?.path) return;
+              if (isTauri()) {
+                import('@tauri-apps/plugin-shell').then(({ open }) => {
+                  open(activeTab.path);
+                });
+              } else {
+                window.open(activeTab.path, '_blank', 'noopener,noreferrer');
+              }
+            }}
+          >
+            <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5">
+              <path d="M12 9v4a1 1 0 0 1-1 1H3a1 1 0 0 1-1-1V5a1 1 0 0 1 1-1h4" />
+              <path d="M9 2h5v5" />
+              <line x1="14" y1="2" x2="7" y2="9" />
+            </svg>
+          </button>
+        </div>
+        <div ref={webViewerRef} className="web-viewer-body" />
+      </div>
 
       {/* Preview pane — only for markdown files */}
       {activeTab?.fileType === 'text' && (viewMode === 'split' || viewMode === 'preview') && (

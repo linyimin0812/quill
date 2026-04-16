@@ -6,12 +6,11 @@
 
 const SESSION_KEY = 'quill:auth-token';
 
+import { getApiBase } from './platform';
+
 /** Get the API base URL (same logic as storageClient) */
 export function getApiRoot(): string {
-  if (typeof window !== 'undefined' && window.location.protocol === 'tauri:') {
-    return 'http://localhost:3001/quill/api';
-  }
-  return '/quill/api';
+  return getApiBase();
 }
 
 /** Get the current auth token from sessionStorage */

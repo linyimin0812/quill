@@ -5,6 +5,7 @@ export type Theme = 'light' | 'dark' | 'system';
 export type AppPage = 'editor' | 'vault' | 'settings';
 export type SettingsTab = 'appearance' | 'editor' | 'shortcuts' | 'vault' | 'sync' | 'llm' | 'prompt' | 'security' | 'about';
 export type LlmProvider = 'anthropic' | 'openai' | 'google' | 'xai' | 'mistral' | 'groq' | 'openrouter' | 'local';
+export type LinkOpenMode = 'external' | 'internal';
 
 export interface ShortcutItem {
   id: string;
@@ -43,6 +44,9 @@ interface SettingsState {
   syntaxHighlight: boolean;
   autoSave: boolean;
   spellCheck: boolean;
+
+  // Links
+  linkOpenMode: LinkOpenMode;
 
   // Vault
   vaultPath: string;
@@ -101,7 +105,7 @@ function debouncedPersist(state: Partial<SettingsState>) {
     // Extract only serializable settings (exclude functions and runtime state)
     const { theme, fontSize, lineHeight, showAiPanel, showStatusBar,
       editorFont, editorFontSize, tabSize, wrapColumn, showLineNumbers,
-      syntaxHighlight, autoSave, spellCheck, vaultPath, imagePath, docExtension,
+      syntaxHighlight, autoSave, spellCheck, linkOpenMode, vaultPath, imagePath, docExtension,
       watchFileChanges, trashOnDelete, syncMethod, syncEndpoint, syncAccessKey,
       syncSecretKey, syncBucket, autoSync, e2eEncrypt, llmProvider, llmApiKey,
       llmModel, temperature, maxTokens, ollamaUrl, systemPrompt, writingStyle,
@@ -109,7 +113,7 @@ function debouncedPersist(state: Partial<SettingsState>) {
     storageClient.set(SETTINGS_STORAGE_KEY, {
       theme, fontSize, lineHeight, showAiPanel, showStatusBar,
       editorFont, editorFontSize, tabSize, wrapColumn, showLineNumbers,
-      syntaxHighlight, autoSave, spellCheck, vaultPath, imagePath, docExtension,
+      syntaxHighlight, autoSave, spellCheck, linkOpenMode, vaultPath, imagePath, docExtension,
       watchFileChanges, trashOnDelete, syncMethod, syncEndpoint, syncAccessKey,
       syncSecretKey, syncBucket, autoSync, e2eEncrypt, llmProvider, llmApiKey,
       llmModel, temperature, maxTokens, ollamaUrl, systemPrompt, writingStyle,
@@ -140,6 +144,9 @@ export const useSettingsStore = create<SettingsState>((set) => ({
   syntaxHighlight: true,
   autoSave: true,
   spellCheck: false,
+
+  // Links
+  linkOpenMode: 'external' as LinkOpenMode,
 
   // Vault
   vaultPath: '~/Documents/quill/my-notes',

@@ -8,7 +8,7 @@ const AUTO_SAVE_DELAY_MS = 1000;
 
 export type ViewMode = 'split' | 'edit' | 'preview';
 
-export type FileType = 'text' | 'image' | 'pdf' | 'code';
+export type FileType = 'text' | 'image' | 'pdf' | 'code' | 'web';
 
 const IMAGE_EXTENSIONS = new Set(['png', 'jpg', 'jpeg', 'gif', 'webp', 'svg', 'bmp', 'ico']);
 const PDF_EXTENSIONS = new Set(['pdf']);
@@ -62,6 +62,8 @@ interface EditorState {
   setCursorPosition: (line: number, col: number) => void;
   setWordCount: (count: number) => void;
 
+  /** Open a web URL in a new tab */
+  openWebTab: (url: string, title?: string) => void;
   /** Open a file from the vault (reads content via VaultStore) */
   openFile: (path: string, name: string) => Promise<void>;
   /** Save the active tab's content to the vault */
@@ -92,9 +94,12 @@ let persistTabsTimer: ReturnType<typeof setTimeout> | null = null;
 function persistOpenTabs(vaultId: string, tabs: FileTab[], activeTabId: string | null) {
   if (persistTabsTimer) clearTimeout(persistTabsTimer);
   persistTabsTimer = setTimeout(() => {
+    // Filter out web tabs — they cannot be restored across sessions
+    const persistableTabs = tabs.filter((t) => t.fileType !== 'web');
+    const activeTab = persistableTabs.find((t) => t.id === activeTabId);
     const data: PersistedOpenTabs = {
-      tabs: tabs.map((t) => ({ path: t.path, name: t.name })),
-      activeTabPath: tabs.find((t) => t.id === activeTabId)?.path ?? null,
+      tabs: persistableTabs.map((t) => ({ path: t.path, name: t.name })),
+      activeTabPath: activeTab?.path ?? null,
     };
     storageClient.set(openTabsStorageKey(vaultId), data);
   }, 500);
@@ -173,6 +178,28 @@ export const useEditorStore = create<EditorState>()(
       setCursorPosition: (line, col) => set({ cursorLine: line, cursorCol: col }),
       setWordCount: (count) => set({ wordCount: count }),
 
+      openWebTab: (url, title) => {
+        const tabId = `web:${url}`;
+        const existing = get().tabs.find((t) => t.id === tabId);
+        if (existing) {
+          set({ activeTabId: existing.id });
+          return;
+        }
+        const displayName = title || (() => { try { return new URL(url).hostname; } catch { return url; } })();
+        const newTab: FileTab = {
+          id: tabId,
+          name: displayName,
+          path: url,
+          content: '',
+          isDirty: false,
+          fileType: 'web',
+        };
+        set((state) => ({
+          tabs: [...state.tabs, newTab],
+          activeTabId: newTab.id,
+        }));
+      },
+
       openFile: async (filePath, name) => {
         // Include vault id in tab id to distinguish same-name files across vaults
         const vaultId = useVaultStore.getState().activeVaultId || '';
@@ -214,6 +241,9 @@ export const useEditorStore = create<EditorState>()(
         if (!saved || saved.tabs.length === 0) return;
 
         for (const tabInfo of saved.tabs) {
+          // Skip web tabs — they cannot be restored across sessions
+          if (tabInfo.path.startsWith('http://') || tabInfo.path.startsWith('https://')) continue;
+
           const tabId = `${vaultId}:${tabInfo.path}`;
           const alreadyOpen = get().tabs.find((t) => t.id === tabId);
           if (alreadyOpen) continue;

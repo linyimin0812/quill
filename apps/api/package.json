@@ -9,7 +9,8 @@
     "build": "nest build",
     "start": "node dist/main.js",
     "start:prod": "node dist/main.js",
-    "clean": "rm -rf dist"
+    "clean": "rm -rf dist",
+    "build:sidecar": "bash scripts/build-sidecar.sh"
   },
   "dependencies": {
     "@nestjs/common": "^10.4.0",

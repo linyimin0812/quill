@@ -7,6 +7,7 @@ import {
 } from '@quill/vault-provider';
 import { useSettingsStore } from './settingsStore';
 import { storageClient } from '@/utils/storageClient';
+import { getSidecarOrigin } from '@/utils/platform';
 
 /** Generate a short unique ID */
 function generateId(): string {
@@ -82,8 +83,7 @@ export const useVaultStore = create<VaultState>()(
 
         initVault: async () => {
           // Wait for backend API to be ready (sidecar may take a few seconds to start)
-          const apiBase = typeof window !== 'undefined' && window.location.protocol === 'tauri:'
-            ? 'http://localhost:3001' : '';
+          const apiBase = getSidecarOrigin();
           const maxRetries = 15;
           for (let attempt = 1; attempt <= maxRetries; attempt++) {
             try {

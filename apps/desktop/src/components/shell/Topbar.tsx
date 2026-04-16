@@ -68,7 +68,7 @@ export function Topbar({ isMobile, onToggleSidebar }: TopbarProps) {
           </button>
         )}
         <div className="logo" onClick={() => setCurrentPage('editor')}>
-          <img src="/quill/quill.svg" alt="Quill" width="24" height="24" style={{ borderRadius: 5 }} />
+          <img src={`${import.meta.env.BASE_URL}quill.svg`} alt="Quill" width="24" height="24" style={{ borderRadius: 5 }} />
           <span className="logo-name">
             Qu<em>ill</em>
           </span>

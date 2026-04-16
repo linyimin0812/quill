@@ -129,7 +129,7 @@ export function Sidebar({ onFileSelect }: SidebarProps): React.JSX.Element {
     if (newItemType === 'dir') {
       await vaultCreateDir(fullPath);
     } else {
-      const defaultContent = '\n'.repeat(10);
+      const defaultContent = `# ${finalName.substring(0, finalName.lastIndexOf('.'))}`;
       await vaultCreateFile(fullPath, defaultContent);
     }
 

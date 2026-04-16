@@ -1,7 +1,7 @@
 import { useEffect } from 'react';
 import { useSettingsStore } from '@/store/settingsStore';
+import { isTauri, getApiBase } from '@/utils/platform';
 
-const SIDECAR_URL = 'http://localhost:3001';
 const POLL_INTERVAL_MS = 3000;
 
 /**
@@ -14,7 +14,7 @@ export function useSidecar() {
 
   useEffect(() => {
     // Only poll in Tauri environment; in browser dev mode the backend is started manually
-    if (typeof window === 'undefined' || window.location.protocol !== 'tauri:') {
+    if (typeof window === 'undefined' || !isTauri()) {
       setSidecarReady(true);
       return;
     }
@@ -25,7 +25,7 @@ export function useSidecar() {
 
     const poll = async () => {
       try {
-        const response = await fetch(`${SIDECAR_URL}/health`);
+        const response = await fetch(`${getApiBase()}/health`);
         if (response.ok && !cancelled) {
           setSidecarReady(true);
           return;

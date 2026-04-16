@@ -12,6 +12,9 @@ import rehypeReact from 'rehype-react';
 import { jsx, jsxs } from 'react/jsx-runtime';
 import { ContainerRegistry, registerBuiltinPlugins } from '@quill/container-plugins';
 import type { ContainerProps } from '@quill/container-plugins';
+import { getSidecarOrigin, isTauri } from '@/utils/platform';
+import { useSettingsStore } from '@/store/settingsStore';
+import { useEditorStore } from '@/store/editorStore';
 
 // Ensure built-in plugins are registered once
 registerBuiltinPlugins();
@@ -77,6 +80,33 @@ export function MarkdownPreview({ content, currentFilePath, vaultRoot }: Markdow
       };
     }
 
+    // Custom anchor component: handle external links based on linkOpenMode setting
+    map['a'] = function ExternalLink(props: any) {
+      const { href, children, node, ...rest } = props;
+      const isExternal = href && (href.startsWith('http://') || href.startsWith('https://'));
+      if (isExternal) {
+        return createElement('a', {
+          ...rest,
+          href,
+          onClick: (e: React.MouseEvent) => {
+            e.preventDefault();
+            const linkOpenMode = useSettingsStore.getState().linkOpenMode;
+            if (linkOpenMode === 'internal') {
+              const linkText = typeof children === 'string' ? children : href;
+              useEditorStore.getState().openWebTab(href, linkText);
+            } else if (isTauri()) {
+              import('@tauri-apps/plugin-shell').then(({ open }) => {
+                open(href);
+              });
+            } else {
+              window.open(href, '_blank', 'noopener,noreferrer');
+            }
+          },
+        }, children);
+      }
+      return createElement('a', { href, ...rest }, children);
+    };
+
     // Custom img component: resolve vault-relative paths to backend API URLs
     map['img'] = function VaultImage(props: any) {
       const { src, alt, node, ...rest } = props;
@@ -88,8 +118,7 @@ export function MarkdownPreview({ content, currentFilePath, vaultRoot }: Markdow
       // Decode first in case the path is already URL-encoded (e.g. from HTML img tags)
       const rawPath = src.replace(/^\.\//, '');
       const imagePath = decodeURIComponent(rawPath);
-      const apiBase = typeof window !== 'undefined' && window.location.protocol === 'tauri:'
-        ? 'http://localhost:3001' : '';
+      const apiBase = getSidecarOrigin();
       let imageUrl = `${apiBase}/quill/api/vault/image?path=${encodeURIComponent(imagePath)}`;
       if (vaultRoot) {
         imageUrl += `&root=${encodeURIComponent(vaultRoot)}`;

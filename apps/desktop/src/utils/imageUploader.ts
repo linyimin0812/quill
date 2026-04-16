@@ -47,11 +47,10 @@ export interface ImageUploadStrategy {
 
 // ─── Helpers ────────────────────────────────────────────
 
+import { getSidecarOrigin } from './platform';
+
 function getApiBase(): string {
-  if (typeof window !== 'undefined' && window.location.protocol === 'tauri:') {
-    return 'http://localhost:3001';
-  }
-  return '';
+  return getSidecarOrigin();
 }
 
 // ─── Local Server Strategy ──────────────────────────────

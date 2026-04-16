@@ -271,20 +271,30 @@ export function SettingsPage() {
     <div className="settings-page">
       {/* Left navigation */}
       <nav className="sn">
-        {NAV_GROUPS.map((group) => (
-          <div className="sn-grp" key={group.label}>
-            <div className="sn-lbl">{group.label}</div>
-            {group.items.map((item) => (
-              <button
-                key={item.id}
-                className={`sn-item ${settingsTab === item.id ? 'on' : ''}`}
-                onClick={() => setSettingsTab(item.id)}
-              >
-                {item.icon} {item.name}
-              </button>
-            ))}
-          </div>
-        ))}
+        <div className="sn-nav-body">
+          {NAV_GROUPS.map((group) => (
+            <div className="sn-grp" key={group.label}>
+              <div className="sn-lbl">{group.label}</div>
+              {group.items.map((item) => (
+                <button
+                  key={item.id}
+                  className={`sn-item ${settingsTab === item.id ? 'on' : ''}`}
+                  onClick={() => setSettingsTab(item.id)}
+                >
+                  {item.icon} {item.name}
+                </button>
+              ))}
+            </div>
+          ))}
+        </div>
+        <div className="sn-footer">
+          <button className="sn-back-btn" onClick={() => store.setCurrentPage('editor')}>
+            <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5">
+              <polyline points="10,2 4,8 10,14" />
+            </svg>
+            返回编辑器
+          </button>
+        </div>
       </nav>
 
       {/* Right panel */}
@@ -339,6 +349,16 @@ export function SettingsPage() {
             </div>
             <div className="tr"><div className="tr-info"><h4>显示行号</h4><p>在编辑区左侧显示行号</p></div><Toggle value={store.showLineNumbers} onChange={(v) => updateSettings({ showLineNumbers: v })} /></div>
             <div className="tr"><div className="tr-info"><h4>自动保存</h4><p>每 30 秒自动保存当前文档</p></div><Toggle value={store.autoSave} onChange={(v) => updateSettings({ autoSave: v })} /></div>
+            <div className="tr">
+              <div className="tr-info">
+                <h4>链接打开方式</h4>
+                <p>{store.linkOpenMode === 'external' ? '点击链接将在系统默认浏览器中打开' : '点击链接将在应用内嵌窗口中打开'}</p>
+              </div>
+              <select className="fsel" style={{ maxWidth: 200 }} value={store.linkOpenMode} onChange={(e) => updateSettings({ linkOpenMode: e.target.value as 'external' | 'internal' })}>
+                <option value="external">🌐 外部浏览器</option>
+                <option value="internal">📌 应用内打开</option>
+              </select>
+            </div>
           </div>
         )}
 
@@ -610,7 +630,7 @@ export function SettingsPage() {
         {settingsTab === 'about' && (
           <div className="ss-sec">
             <div style={{ display: 'flex', alignItems: 'center', gap: 13, marginBottom: 16 }}>
-              <img src="/quill/quill.svg" alt="Quill" width="48" height="48" style={{ borderRadius: 5 }} />
+              <img src={`${import.meta.env.BASE_URL}quill.svg`} alt="Quill" width="48" height="48" style={{ borderRadius: 5 }} />
               <div>
                 <div style={{ fontSize: 20, fontWeight: 700, color: 'var(--t1)', letterSpacing: '-.02em' }}>Quill<span style={{ color: 'var(--acc)' }}>.</span></div>
                 <div style={{ fontSize: 11, color: 'var(--t3)', marginTop: 2, fontFamily: 'var(--font-mono)' }}>v0.1.0-alpha · Local-first Markdown Editor</div>

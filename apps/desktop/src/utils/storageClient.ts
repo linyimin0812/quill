@@ -4,13 +4,11 @@
  * persisted through this client instead of localStorage.
  */
 import { authHeaders } from './authToken';
+import { getSidecarOrigin } from './platform';
 
 /** Detect API base URL: absolute in Tauri, relative in browser dev */
 function getApiBase(): string {
-  if (typeof window !== 'undefined' && window.location.protocol === 'tauri:') {
-    return 'http://localhost:3001/quill/api/storage';
-  }
-  return '/quill/api/storage';
+  return `${getSidecarOrigin()}/quill/api/storage`;
 }
 
 const BASE = getApiBase();

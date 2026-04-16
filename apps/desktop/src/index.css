@@ -82,6 +82,7 @@ button { font-family: var(--font-ui); cursor: pointer; border: none; background:
 .ftab:hover { color: var(--t2); background: var(--hov); }
 .ftab.on { color: var(--t1); border-color: var(--acc); background: var(--surf); }
 .ftab-dot { width: 5px; height: 5px; border-radius: 50%; background: var(--amber); flex-shrink: 0; }
+.ftab-icon { font-size: 12px; flex-shrink: 0; line-height: 1; }
 .ftab-name { max-width: 110px; overflow: hidden; text-overflow: ellipsis; }
 .ftab-x {
   opacity: 0; font-size: 10px; flex-shrink: 0; width: 14px; height: 14px;
@@ -758,7 +759,11 @@ button { font-family: var(--font-ui); cursor: pointer; border: none; background:
 
 /* ── Settings Page ── */
 .settings-page { display: flex; flex-direction: row; max-width: none; height: 100%; }
-.sn { width: 190px; flex-shrink: 0; background: var(--panel); border-right: 1px solid var(--brd); padding: 11px 7px; overflow-y: auto; }
+.sn { width: 190px; flex-shrink: 0; background: var(--panel); border-right: 1px solid var(--brd); display: flex; flex-direction: column; overflow: hidden; }
+.sn-nav-body { flex: 1; overflow-y: auto; padding: 11px 7px; }
+.sn-footer { padding: 8px 7px; border-top: 1px solid var(--brd); flex-shrink: 0; }
+.sn-back-btn { display: flex; align-items: center; gap: 8px; padding: 7px 9px; border-radius: 6px; cursor: pointer; color: var(--t2); font-size: calc(var(--ui-font-size) - 2px); transition: all .12s; border: none; background: transparent; width: 100%; text-align: left; font-family: var(--font-ui); }
+.sn-back-btn:hover { background: var(--hov); color: var(--t1); }
 .sn-grp { margin-bottom: 13px; }
 .sn-lbl { font-size: 9px; font-weight: 600; color: var(--t3); text-transform: uppercase; letter-spacing: .12em; padding: 0 8px; margin-bottom: 3px; }
 .sn-item { display: flex; align-items: center; gap: 8px; padding: 7px 9px; border-radius: 6px; cursor: pointer; color: var(--t2); font-size: calc(var(--ui-font-size) - 2px); transition: all .12s; border: none; background: transparent; width: 100%; text-align: left; font-family: var(--font-ui); }
@@ -768,6 +773,7 @@ button { font-family: var(--font-ui); cursor: pointer; border: none; background:
 .ss-sec { margin-bottom: 26px; }
 .ss-title { font-size: calc(var(--ui-font-size) + 1px); font-weight: 700; color: var(--t1); margin-bottom: 3px; letter-spacing: -.01em; }
 .ss-desc { font-size: calc(var(--ui-font-size) - 2px); color: var(--t3); margin-bottom: 14px; }
+.ss-back { padding: 20px 26px; border-top: 1px solid var(--brd); flex-shrink: 0; }
 .fr { margin-bottom: 14px; }
 .fr2 { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-bottom: 14px; }
 .fl { font-size: calc(var(--ui-font-size) - 2.5px); font-weight: 600; color: var(--t2); margin-bottom: 5px; display: flex; align-items: center; gap: 6px; }
@@ -1108,6 +1114,33 @@ textarea.fi2 { resize: vertical; line-height: 1.5; }
 .image-viewer-info {
   font-size: 12px; color: var(--t3); font-family: var(--font-mono);
   word-break: break-all; text-align: center;
+}
+
+
+
+/* ── Web Viewer (embedded Tauri Webview) ── */
+.web-viewer-container {
+  flex: 1; display: flex; flex-direction: column;
+  background: var(--surf); overflow: hidden; position: relative;
+}
+.web-viewer-bar {
+  display: flex; align-items: center; gap: 8px;
+  padding: 6px 12px; background: var(--panel);
+  border-bottom: 1px solid var(--brd); flex-shrink: 0;
+}
+.web-viewer-url {
+  flex: 1; font-size: 12px; color: var(--t3); font-family: var(--font-mono);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.web-viewer-open-btn {
+  display: flex; align-items: center; justify-content: center;
+  width: 28px; height: 28px; border: none; border-radius: 5px;
+  background: transparent; color: var(--t2); cursor: pointer;
+  flex-shrink: 0; transition: background .14s, color .14s;
+}
+.web-viewer-open-btn:hover { background: var(--hov); color: var(--t1); }
+.web-viewer-body {
+  flex: 1; position: relative;
 }
 
 /* ── View mode disabled state ── */

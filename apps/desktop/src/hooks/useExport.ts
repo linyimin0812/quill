@@ -16,6 +16,7 @@ import { jsx, jsxs } from 'react/jsx-runtime';
 import { ContainerRegistry, registerBuiltinPlugins } from '@quill/container-plugins';
 import type { ContainerProps } from '@quill/container-plugins';
 import html2pdf from 'html2pdf.js';
+import { getSidecarOrigin } from '@/utils/platform';
 
 // Ensure built-in plugins are registered once
 registerBuiltinPlugins();
@@ -32,11 +33,8 @@ export function hasContainerSyntax(content: string): boolean {
 
 /** Build the API base URL for image references */
 function getImageApiBase(): string {
-  return typeof window !== 'undefined' && window.location.protocol === 'tauri:'
-    ? 'http://localhost:3001' : '';
+  return getSidecarOrigin();
 }
-
-
 
 /**
  * Build a component map from the ContainerRegistry for rehype-react.
@@ -165,7 +163,7 @@ async function inlineImages(html: string): Promise<string> {
 
 /**
  * Styles for exported HTML / PDF.
- * These mirror the `.md-preview` styles from index.css with CSS variables
+ * These mirror the .md-preview styles from index.css with CSS variables
  * resolved to the light-theme palette so the export looks identical to the
  * in-app preview.
  */

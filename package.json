@@ -1,5 +1,5 @@
 {
-  "name": "quill-monorepo",
+  "name": "quill",
   "private": true,
   "version": "0.1.0",
   "description": "Quill — AI-enhanced local-first Markdown editor",

@@ -67,7 +67,7 @@ export function LockScreen({ onUnlock, apiBase }: LockScreenProps) {
         </div>
 
         <div className="lock-brand">
-          <img src="/quill/quill.svg" alt="Quill" width="28" height="28" style={{ borderRadius: 6 }} />
+          <img src={`${import.meta.env.BASE_URL}quill.svg`} alt="Quill" width="28" height="28" style={{ borderRadius: 6 }} />
           <h2 className="lock-title">Quill</h2>
         </div>
         <p className="lock-subtitle">请输入访问密码以继续</p>
