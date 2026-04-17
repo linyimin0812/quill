@@ -360,7 +360,13 @@ ${inlinedBody}
     `;
     document.head.appendChild(pdfFixStyle);
 
-    html2pdf()
+    const cleanup = () => {
+      document.body.removeChild(container);
+      document.head.removeChild(styleEl);
+      document.head.removeChild(pdfFixStyle);
+    };
+
+    const worker = html2pdf()
       .set({
         margin: [10, 10, 10, 10],
         filename: `${pdfTitle}.pdf`,
@@ -368,22 +374,45 @@ ${inlinedBody}
         html2canvas: { scale: 2, useCORS: true, logging: false },
         jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' },
       })
-      .from(container.firstElementChild as HTMLElement)
-      .save()
-      .then(() => {
-        document.body.removeChild(container);
-        document.head.removeChild(styleEl);
-      })
-      .catch(() => {
-        document.body.removeChild(container);
-        document.head.removeChild(styleEl);
-      });
+      .from(container.firstElementChild as HTMLElement);
+
+    // In Tauri, generate blob and save via dialog; in browser, use default .save()
+    const { isTauri: checkTauri } = await import('@/utils/platform');
+    if (checkTauri()) {
+      worker.outputPdf('blob').then(async (pdfBlob: Blob) => {
+        cleanup();
+        await downloadBlob(pdfBlob, `${pdfTitle}.pdf`);
+      }).catch(() => cleanup());
+    } else {
+      worker.save().then(() => cleanup()).catch(() => cleanup());
+    }
   }, [getActiveContent, vaultRoot]);
 
   return { exportMarkdown, exportHtml, exportPdf, getActiveContent };
 }
 
-function downloadBlob(blob: Blob, filename: string) {
+async function downloadBlob(blob: Blob, filename: string) {
+  const { isTauri } = await import('@/utils/platform');
+  if (isTauri()) {
+    try {
+      const { save } = await import('@tauri-apps/plugin-dialog');
+      const { writeFile } = await import('@tauri-apps/plugin-fs');
+      const filePath = await save({
+        defaultPath: filename,
+        filters: [{ name: 'All Files', extensions: ['*'] }],
+      });
+      if (filePath) {
+        const arrayBuffer = await blob.arrayBuffer();
+        await writeFile(filePath, new Uint8Array(arrayBuffer));
+        // Show a brief success notification
+        showExportNotification(`已保存到 ${filePath}`);
+      }
+    } catch (error) {
+      console.error('[Export] Save failed:', error);
+    }
+    return;
+  }
+  // Browser fallback
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
   a.href = url;
@@ -392,6 +421,25 @@ function downloadBlob(blob: Blob, filename: string) {
   a.click();
   document.body.removeChild(a);
   URL.revokeObjectURL(url);
+}
+
+/** Show a temporary toast notification for export success */
+function showExportNotification(message: string) {
+  const toast = document.createElement('div');
+  toast.textContent = message;
+  toast.style.cssText = `
+    position: fixed; bottom: 32px; left: 50%; transform: translateX(-50%);
+    background: var(--surf2, #2a2d3e); color: var(--t1, #cdd6f4);
+    padding: 10px 20px; border-radius: 8px; font-size: 13px;
+    box-shadow: 0 4px 16px rgba(0,0,0,.3); z-index: 9999;
+    animation: toast-in .3s ease;
+  `;
+  document.body.appendChild(toast);
+  setTimeout(() => {
+    toast.style.transition = 'opacity .3s';
+    toast.style.opacity = '0';
+    setTimeout(() => document.body.removeChild(toast), 300);
+  }, 2500);
 }
 
 function escapeHtml(text: string): string {

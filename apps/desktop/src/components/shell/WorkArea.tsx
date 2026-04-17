@@ -94,20 +94,26 @@ export function WorkArea() {
 
   // Web viewer: embedded Tauri Webview management
   const webViewerRef = useRef<HTMLDivElement>(null);
-  const webviewInstances = useRef<Map<string, any>>(new Map());
+  // Store webview labels (strings) — webviews are created/managed via Rust commands
+  const webviewLabels = useRef<Map<string, string>>(new Map());
   // per-tab webview state
   const [webviewStatus, setWebviewStatus] = useState<Record<string, WebviewTabStatus>>({});
 
-  // Sync a webview's position/size to match the web-viewer-body container
-  const syncWebviewPosition = useCallback(async (webview: any) => {
+  // Sync a webview's position/size to match the web-viewer-body container via Rust command
+  const syncWebviewPosition = useCallback(async (webviewLabel: string) => {
     const container = webViewerRef.current;
-    if (!container || !webview) return;
+    if (!container || !webviewLabel) return;
     try {
       const rect = container.getBoundingClientRect();
       if (rect.width === 0 || rect.height === 0) return;
-      const { LogicalPosition, LogicalSize } = await import('@tauri-apps/api/dpi');
-      await webview.setPosition(new LogicalPosition(rect.left, rect.top));
-      await webview.setSize(new LogicalSize(rect.width, rect.height));
+      const { invoke } = await import('@tauri-apps/api/core');
+      await invoke('set_webview_position', {
+        label: webviewLabel,
+        x: Math.round(rect.left),
+        y: Math.round(rect.top),
+        width: Math.round(rect.width),
+        height: Math.round(rect.height),
+      });
     } catch {}
   }, []);
 
@@ -121,10 +127,14 @@ export function WorkArea() {
     // Hide all webviews that are not the active one
     (async () => {
       try {
-        const { LogicalPosition } = await import('@tauri-apps/api/dpi');
-        for (const [id, wv] of webviewInstances.current.entries()) {
+        const { invoke } = await import('@tauri-apps/api/core');
+        for (const [id, wvLabel] of webviewLabels.current.entries()) {
           if (id !== tabId) {
-            try { await wv.setPosition(new LogicalPosition(-10000, -10000)); } catch {}
+            try {
+              await invoke('set_webview_position', {
+                label: wvLabel, x: -10000, y: -10000, width: 1, height: 1,
+              });
+            } catch {}
           }
         }
       } catch {}
@@ -132,9 +142,9 @@ export function WorkArea() {
 
     if (!isWebTab || !tabId || !url) return;
 
-    const existing = webviewInstances.current.get(tabId);
-    if (existing) {
-      requestAnimationFrame(() => syncWebviewPosition(existing));
+    const existingLabel = webviewLabels.current.get(tabId);
+    if (existingLabel) {
+      requestAnimationFrame(() => syncWebviewPosition(existingLabel));
       return;
     }
 
@@ -143,7 +153,7 @@ export function WorkArea() {
 
     // Create new webview — delay to ensure the container is visible and has layout
     const createTimer = setTimeout(async () => {
-      // ── Step 1: Validate URL format ──────────────────────────────────────
+      // ── Validate URL format ──────────────────────────────────────────────
       try {
         const parsed = new URL(url);
         if (!['http:', 'https:'].includes(parsed.protocol)) throw new Error('bad protocol');
@@ -152,76 +162,40 @@ export function WorkArea() {
         return;
       }
 
-      // ── Step 2: Network pre-check via Rust (no CORS restrictions) ───────
+      // ── Step 2: Network pre-check via curl (no CORS restrictions) ──────
       try {
         const { invoke } = await import('@tauri-apps/api/core');
-        const result = await invoke<{
-          reachable: boolean;
-          status: number;
-          x_frame_options: string;
-          csp: string;
-          error: string;
-        }>('check_url', { url });
-
+        const result = await invoke<{ reachable: boolean; error: string }>('check_url', { url });
         if (!result.reachable) {
-          const msg = result.error.toLowerCase();
-          let code: WebviewError['code'] = 'unknown';
-          if (msg.includes('timed out') || msg.includes('timeout')) code = 'timeout';
-          else if (msg.includes('dns') || msg.includes('resolve') || msg.includes('no such host')) code = 'dns';
-          else if (msg.includes('refused') || msg.includes('connection refused')) code = 'refused';
-          setWebviewStatus((prev) => ({ ...prev, [tabId]: { error: { code } } }));
-          return;
-        }
-
-        const xfoUpper = result.x_frame_options.toUpperCase();
-        if (xfoUpper === 'DENY' || xfoUpper === 'SAMEORIGIN') {
-          setWebviewStatus((prev) => ({ ...prev, [tabId]: { error: { code: 'blocked' } } }));
-          return;
-        }
-        if (result.csp && /frame-ancestors\s+['"]?none['"]?/i.test(result.csp)) {
-          setWebviewStatus((prev) => ({ ...prev, [tabId]: { error: { code: 'blocked' } } }));
-          return;
-        }
-        if (result.status >= 400) {
-          setWebviewStatus((prev) => ({ ...prev, [tabId]: { error: { code: 'http', status: result.status } } }));
+          setWebviewStatus((prev) => ({ ...prev, [tabId]: { error: { code: 'unknown' } } }));
           return;
         }
       } catch (invokeErr) {
-        console.warn('[WorkArea] check_url invoke failed, proceeding anyway:', invokeErr);
-        // If invoke itself fails (e.g. non-Tauri env), just proceed to create the webview
+        console.warn('[WorkArea] check_url failed, proceeding anyway:', invokeErr);
       }
 
-      // ── Step 3: Create native Webview ────────────────────────────────────
+      // ── Step 3: Create native Webview via Rust command ───────────────────
       try {
-        const { getCurrentWindow } = await import('@tauri-apps/api/window');
-        const { Webview } = await import('@tauri-apps/api/webview');
+        const { invoke } = await import('@tauri-apps/api/core');
         const container = webViewerRef.current;
         if (!container) return;
         const rect = container.getBoundingClientRect();
         if (rect.width === 0 || rect.height === 0) return;
         const label = `wv-${Date.now()}`;
-        const webview = new Webview(getCurrentWindow(), label, {
+        const userAgent = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.0 Safari/605.1.15';
+
+        await invoke('create_webview', {
+          label,
           url,
           x: Math.round(rect.left),
           y: Math.round(rect.top),
           width: Math.round(rect.width),
           height: Math.round(rect.height),
+          userAgent,
         });
-        webview.once('tauri://error', (e: any) => {
-          console.error('[WorkArea] Webview creation error:', e);
-          setWebviewStatus((prev) => ({ ...prev, [tabId]: { error: { code: 'unknown' } } }));
-        });
-        webview.once('tauri://created', () => {
-          setWebviewStatus((prev) => ({ ...prev, [tabId]: 'ready' }));
-        });
-        webviewInstances.current.set(tabId, webview);
-        // Safety net: if tauri://created never fires (rare), show error after 12s
-        setTimeout(() => {
-          setWebviewStatus((prev) => {
-            if (prev[tabId] === 'loading') return { ...prev, [tabId]: { error: { code: 'unknown' } } };
-            return prev;
-          });
-        }, 12000);
+
+        webviewLabels.current.set(tabId, label);
+        setWebviewStatus((prev) => ({ ...prev, [tabId]: 'ready' }));
       } catch (error) {
         console.error('[WorkArea] Failed to create embedded webview:', error);
         setWebviewStatus((prev) => ({ ...prev, [tabId]: { error: { code: 'unknown' } } }));
@@ -238,8 +212,8 @@ export function WorkArea() {
     if (!container) return;
     const observer = new ResizeObserver(() => {
       if (activeTab?.fileType !== 'web' || !activeTab?.id) return;
-      const wv = webviewInstances.current.get(activeTab.id);
-      if (wv) syncWebviewPosition(wv);
+      const wvLabel = webviewLabels.current.get(activeTab.id);
+      if (wvLabel) syncWebviewPosition(wvLabel);
     });
     observer.observe(container);
     return () => observer.disconnect();
@@ -248,10 +222,12 @@ export function WorkArea() {
   // Clean up webviews when tabs are closed
   useEffect(() => {
     const openTabIds = new Set(tabs.filter((t) => t.fileType === 'web').map((t) => t.id));
-    for (const [id, wv] of webviewInstances.current.entries()) {
+    for (const [id, wvLabel] of webviewLabels.current.entries()) {
       if (!openTabIds.has(id)) {
-        try { wv.close(); } catch {}
-        webviewInstances.current.delete(id);
+        import('@tauri-apps/api/core').then(({ invoke }) => {
+          invoke('close_webview', { label: wvLabel }).catch(() => {});
+        });
+        webviewLabels.current.delete(id);
         setWebviewStatus((prev) => {
           const next = { ...prev };
           delete next[id];
@@ -263,12 +239,14 @@ export function WorkArea() {
 
   // Clean up all webviews when WorkArea unmounts (e.g. switching to settings page)
   useEffect(() => {
-    const instances = webviewInstances.current;
+    const labels = webviewLabels.current;
     return () => {
-      for (const [, wv] of instances.entries()) {
-        try { wv.close(); } catch {}
-      }
-      instances.clear();
+      import('@tauri-apps/api/core').then(({ invoke }) => {
+        for (const [, wvLabel] of labels.entries()) {
+          invoke('close_webview', { label: wvLabel }).catch(() => {});
+        }
+      });
+      labels.clear();
     };
   }, []);
 
@@ -653,6 +631,41 @@ export function WorkArea() {
         style={{ display: activeTab?.fileType === 'web' ? 'flex' : 'none' }}
       >
         <div className="web-viewer-bar">
+          {/* Back / Forward navigation */}
+          {isTauri() && activeTab?.id && webviewLabels.current.get(activeTab.id) && (
+            <>
+              <button
+                className="web-viewer-nav-btn"
+                title="后退"
+                onClick={() => {
+                  const label = webviewLabels.current.get(activeTab.id!);
+                  if (!label) return;
+                  import('@tauri-apps/api/core').then(({ invoke }) => {
+                    invoke('navigate_webview', { label, action: 'back' }).catch(() => {});
+                  });
+                }}
+              >
+                <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.6">
+                  <path d="M10 3L5 8l5 5" strokeLinecap="round" strokeLinejoin="round" />
+                </svg>
+              </button>
+              <button
+                className="web-viewer-nav-btn"
+                title="前进"
+                onClick={() => {
+                  const label = webviewLabels.current.get(activeTab.id!);
+                  if (!label) return;
+                  import('@tauri-apps/api/core').then(({ invoke }) => {
+                    invoke('navigate_webview', { label, action: 'forward' }).catch(() => {});
+                  });
+                }}
+              >
+                <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.6">
+                  <path d="M6 3l5 5-5 5" strokeLinecap="round" strokeLinejoin="round" />
+                </svg>
+              </button>
+            </>
+          )}
           <span className="web-viewer-url" title={activeTab?.path}>🌐 {activeTab?.fileType === 'web' ? activeTab.path : ''}</span>
           <button
             className="web-viewer-open-btn"

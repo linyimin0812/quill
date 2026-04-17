@@ -82,6 +82,7 @@ function openTabsStorageKey(vaultId: string): string {
 interface PersistedTabInfo {
   path: string;
   name: string;
+  fileType?: FileType;
 }
 
 interface PersistedOpenTabs {
@@ -94,11 +95,9 @@ let persistTabsTimer: ReturnType<typeof setTimeout> | null = null;
 function persistOpenTabs(vaultId: string, tabs: FileTab[], activeTabId: string | null) {
   if (persistTabsTimer) clearTimeout(persistTabsTimer);
   persistTabsTimer = setTimeout(() => {
-    // Filter out web tabs — they cannot be restored across sessions
-    const persistableTabs = tabs.filter((t) => t.fileType !== 'web');
-    const activeTab = persistableTabs.find((t) => t.id === activeTabId);
+    const activeTab = tabs.find((t) => t.id === activeTabId);
     const data: PersistedOpenTabs = {
-      tabs: persistableTabs.map((t) => ({ path: t.path, name: t.name })),
+      tabs: tabs.map((t) => ({ path: t.path, name: t.name, fileType: t.fileType })),
       activeTabPath: activeTab?.path ?? null,
     };
     storageClient.set(openTabsStorageKey(vaultId), data);
@@ -241,37 +240,58 @@ export const useEditorStore = create<EditorState>()(
         if (!saved || saved.tabs.length === 0) return;
 
         for (const tabInfo of saved.tabs) {
-          // Skip web tabs — they cannot be restored across sessions
-          if (tabInfo.path.startsWith('http://') || tabInfo.path.startsWith('https://')) continue;
+          const isWebTab = tabInfo.fileType === 'web'
+            || tabInfo.path.startsWith('http://') || tabInfo.path.startsWith('https://');
 
-          const tabId = `${vaultId}:${tabInfo.path}`;
-          const alreadyOpen = get().tabs.find((t) => t.id === tabId);
-          if (alreadyOpen) continue;
-          try {
-            const fileType = detectFileType(tabInfo.path);
-            const content = (fileType === 'text' || fileType === 'code') ? await useVaultStore.getState().readFile(tabInfo.path) : '';
+          if (isWebTab) {
+            // Restore web tab — use openWebTab logic
+            const webTabId = `web:${tabInfo.path}`;
+            const alreadyOpen = get().tabs.find((t) => t.id === webTabId);
+            if (alreadyOpen) continue;
             const newTab: FileTab = {
-              id: tabId,
+              id: webTabId,
               name: tabInfo.name,
               path: tabInfo.path,
-              content,
+              content: '',
               isDirty: false,
-              fileType,
+              fileType: 'web',
             };
             set((state) => ({
               tabs: [...state.tabs, newTab],
             }));
-          } catch {
-            // File may have been deleted since last session, skip
+          } else {
+            // Restore file tab
+            const tabId = `${vaultId}:${tabInfo.path}`;
+            const alreadyOpen = get().tabs.find((t) => t.id === tabId);
+            if (alreadyOpen) continue;
+            try {
+              const fileType = detectFileType(tabInfo.path);
+              const content = (fileType === 'text' || fileType === 'code') ? await useVaultStore.getState().readFile(tabInfo.path) : '';
+              const newTab: FileTab = {
+                id: tabId,
+                name: tabInfo.name,
+                path: tabInfo.path,
+                content,
+                isDirty: false,
+                fileType,
+              };
+              set((state) => ({
+                tabs: [...state.tabs, newTab],
+              }));
+            } catch {
+              // File may have been deleted since last session, skip
+            }
           }
         }
 
         // Restore active tab
         if (saved.activeTabPath) {
-          const activeId = `${vaultId}:${saved.activeTabPath}`;
-          const exists = get().tabs.find((t) => t.id === activeId);
+          // Try both file-tab and web-tab id formats
+          const fileActiveId = `${vaultId}:${saved.activeTabPath}`;
+          const webActiveId = `web:${saved.activeTabPath}`;
+          const exists = get().tabs.find((t) => t.id === fileActiveId || t.id === webActiveId);
           if (exists) {
-            set({ activeTabId: activeId });
+            set({ activeTabId: exists.id });
           }
         } else if (get().tabs.length > 0 && !get().activeTabId) {
           set({ activeTabId: get().tabs[0].id });

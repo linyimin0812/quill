@@ -1,4 +1,6 @@
 import { EditorState, Transaction, Annotation, ChangeSet } from '@codemirror/state';
+import { keymap } from '@codemirror/view';
+import type { EditorView } from '@codemirror/view';
 
 /**
  * Regex to match an ordered list item: optional leading whitespace, digits, a dot, then a space.
@@ -123,4 +125,47 @@ const orderedListTransactionFilter = EditorState.transactionFilter.of((tr: Trans
   }];
 });
 
-export const orderedListExtension = [orderedListTransactionFilter];
+/**
+ * Handle Enter key in ordered list items — insert the next list number on the new line.
+ * If the current line is an empty list item (e.g. "1. "), remove the prefix and exit the list.
+ */
+function handleOrderedListEnter(view: EditorView): boolean {
+  const { state } = view;
+  const { from } = state.selection.main;
+  const line = state.doc.lineAt(from);
+  const match = line.text.match(OL_ITEM_RE);
+  if (!match) return false;
+
+  const indent = match[1];
+  const currentNumber = parseInt(match[2], 10);
+  const prefixLength = match[0].length;
+  const contentAfterPrefix = line.text.slice(prefixLength);
+  const cursorOffsetInLine = from - line.from;
+
+  // If cursor is within the prefix area, don't handle
+  if (cursorOffsetInLine < prefixLength) return false;
+
+  // If the list item is empty (only prefix, no content), exit the list
+  if (contentAfterPrefix.trim() === '' && cursorOffsetInLine === prefixLength) {
+    view.dispatch({
+      changes: { from: line.from, to: line.to, insert: indent },
+      selection: { anchor: line.from + indent.length },
+    });
+    return true;
+  }
+
+  // Insert newline + next list number
+  const nextPrefix = `${indent}${currentNumber + 1}. `;
+  const textAfterCursor = line.text.slice(cursorOffsetInLine);
+  view.dispatch({
+    changes: { from, to: line.to, insert: `\n${nextPrefix}${textAfterCursor}` },
+    selection: { anchor: from + 1 + nextPrefix.length },
+  });
+  return true;
+}
+
+const orderedListKeymap = keymap.of([
+  { key: 'Enter', run: handleOrderedListEnter },
+]);
+
+export const orderedListExtension = [orderedListTransactionFilter, orderedListKeymap];

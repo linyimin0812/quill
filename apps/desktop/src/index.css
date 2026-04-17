@@ -1132,6 +1132,13 @@ textarea.fi2 { resize: vertical; line-height: 1.5; }
   flex: 1; font-size: 12px; color: var(--t3); font-family: var(--font-mono);
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
+.web-viewer-nav-btn {
+  display: flex; align-items: center; justify-content: center;
+  width: 26px; height: 26px; border: none; border-radius: 5px;
+  background: transparent; color: var(--t2); cursor: pointer;
+  flex-shrink: 0; transition: background .14s, color .14s;
+}
+.web-viewer-nav-btn:hover { background: var(--hov); color: var(--t1); }
 .web-viewer-open-btn {
   display: flex; align-items: center; justify-content: center;
   width: 28px; height: 28px; border: none; border-radius: 5px;

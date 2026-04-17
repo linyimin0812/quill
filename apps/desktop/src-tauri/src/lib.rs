@@ -118,6 +118,10 @@ pub fn run() {
             commands::save_file,
             commands::select_directory,
             commands::check_url,
+            commands::create_webview,
+            commands::navigate_webview,
+            commands::close_webview,
+            commands::set_webview_position,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
