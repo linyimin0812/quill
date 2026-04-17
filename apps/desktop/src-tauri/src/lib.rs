@@ -2,6 +2,7 @@ mod commands;
 
 use std::path::Path;
 use std::process::Command;
+use std::sync::atomic::{AtomicU32, Ordering};
 use tauri::Manager;
 
 /// Try to find `node` on the current PATH.
@@ -39,6 +40,18 @@ fn resolve_nvm_node() -> Option<String> {
     }
 }
 
+/// Global sidecar PID, set during setup and killed after the event loop exits.
+static SIDECAR_PID: AtomicU32 = AtomicU32::new(0);
+
+/// Kill the sidecar process by PID using the `kill` command.
+fn kill_sidecar() {
+    let pid = SIDECAR_PID.load(Ordering::SeqCst);
+    if pid != 0 {
+        println!("[Quill] Killing sidecar (pid: {})", pid);
+        let _ = Command::new("kill").arg(pid.to_string()).status();
+    }
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
@@ -59,13 +72,21 @@ pub fn run() {
                 .expect("failed to get exe directory");
 
             let bundle_dir = {
-                let prod_dir = exe_dir.join("quill-api-bundle");
-                if prod_dir.join("dist").join("index.js").exists() {
-                    prod_dir
+                // Production: Tauri copies resources preserving the relative path structure.
+                // "binaries/quill-api-bundle/**/*" lands at Contents/Resources/binaries/quill-api-bundle/
+                // exe is at Contents/MacOS/quill → ../Resources/binaries/quill-api-bundle/
+                let resources_dir = exe_dir
+                    .join("..").join("Resources")
+                    .join("binaries").join("quill-api-bundle");
+                let candidate = if resources_dir.join("dist").join("index.js").exists() {
+                    resources_dir
                 } else {
-                    // Dev fallback: walk up from target/debug/ to src-tauri/binaries/
+                    // Dev fallback: exe is at target/debug/quill, go up to src-tauri/ then into binaries/
                     exe_dir.join("..").join("..").join("binaries").join("quill-api-bundle")
-                }
+                };
+                // Canonicalize to resolve any ".." components and symlinks,
+                // so import.meta.url in the ESM bundle gets a clean absolute path.
+                candidate.canonicalize().unwrap_or(candidate)
             };
             let main_js = bundle_dir.join("dist").join("index.js");
 
@@ -77,15 +98,23 @@ pub fn run() {
             println!("[Quill] Starting NestJS sidecar from: {:?}", main_js);
 
             // Resolve the full path to `node`.
-            // When launched from Finder, PATH may not include nvm/homebrew paths,
-            // so we check common locations as fallback.
+            // Priority: .node-path (recorded at build time) > NODE_PATH_OVERRIDE > nvm > PATH > well-known paths.
+            // Using the same node version as build time avoids NODE_MODULE_VERSION mismatch
+            // with native addons like better-sqlite3.
             let node_bin = {
+                // 1. Read the node path recorded during build-sidecar.sh
+                let build_time_node = std::fs::read_to_string(bundle_dir.join(".node-path"))
+                    .ok()
+                    .map(|s| s.trim().to_string())
+                    .filter(|s| !s.is_empty() && Path::new(s).exists());
+
                 let candidates = [
+                    build_time_node,
                     std::env::var("NODE_PATH_OVERRIDE").ok(),
+                    resolve_nvm_node(),
                     which_node_from_path(),
                     Some("/usr/local/bin/node".to_string()),
                     Some("/opt/homebrew/bin/node".to_string()),
-                    resolve_nvm_node(),
                 ];
                 candidates.into_iter()
                     .flatten()
@@ -103,7 +132,9 @@ pub fn run() {
 
             match child {
                 Ok(child) => {
-                    println!("[Quill] NestJS sidecar started (pid: {})", child.id());
+                    let pid = child.id();
+                    println!("[Quill] NestJS sidecar started (pid: {})", pid);
+                    SIDECAR_PID.store(pid, Ordering::SeqCst);
                     std::mem::forget(child);
                 }
                 Err(err) => {
@@ -123,6 +154,20 @@ pub fn run() {
             commands::close_webview,
             commands::set_webview_position,
         ])
-        .run(tauri::generate_context!())
-        .expect("error while running tauri application");
+        .on_window_event(|_window, event| {
+            // Kill sidecar when the main window is destroyed (closed)
+            if let tauri::WindowEvent::Destroyed = event {
+                kill_sidecar();
+            }
+        })
+        .build(tauri::generate_context!())
+        .expect("error while building tauri application")
+        .run(|_app, event| {
+            match event {
+                tauri::RunEvent::ExitRequested { .. } | tauri::RunEvent::Exit => {
+                    kill_sidecar();
+                }
+                _ => {}
+            }
+        });
 }

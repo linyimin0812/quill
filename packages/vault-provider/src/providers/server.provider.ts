@@ -31,9 +31,15 @@ export class ServerVaultProvider extends BaseVaultProvider {
   private baseUrl = '';
   private vaultBasePath = '';
 
-  /** Detect API base URL: absolute in Tauri, relative in browser dev */
+  /** Detect API base URL: absolute in Tauri, relative in browser dev.
+   * Tauri v2 uses https://tauri.localhost/ as origin (not tauri: protocol),
+   * so we check the hostname instead of the protocol.
+   */
   private static detectBaseUrl(): string {
-    if (typeof window !== 'undefined' && window.location.protocol === 'tauri:') {
+    if (typeof window !== 'undefined' && (
+      window.location.hostname === 'tauri.localhost' ||
+      window.location.protocol === 'tauri:'
+    )) {
       return 'http://localhost:3001/quill/api/vault';
     }
     return '/quill/api/vault';

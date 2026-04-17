@@ -19,7 +19,9 @@
       "icons/icon.icns",
       "icons/icon.ico"
     ],
-    "resources": []
+    "resources": [
+      "binaries/quill-api-bundle/**/*"
+    ]
   },
   "app": {
     "windows": [
