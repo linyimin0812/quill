@@ -14,6 +14,10 @@ import { getSidecarOrigin, isTauri } from '@/utils/platform';
 import type { ContainerPlugin } from '@quill/container-plugins';
 import { EditorView } from '@codemirror/view';
 
+type WebviewErrorCode = 'dns' | 'refused' | 'timeout' | 'http' | 'invalid_url' | 'blocked' | 'unknown';
+type WebviewError = { code: WebviewErrorCode; status?: number };
+type WebviewTabStatus = 'loading' | 'ready' | { error: WebviewError };
+
 interface HeadingItem {
   level: number;
   text: string;
@@ -91,6 +95,8 @@ export function WorkArea() {
   // Web viewer: embedded Tauri Webview management
   const webViewerRef = useRef<HTMLDivElement>(null);
   const webviewInstances = useRef<Map<string, any>>(new Map());
+  // per-tab webview state
+  const [webviewStatus, setWebviewStatus] = useState<Record<string, WebviewTabStatus>>({});
 
   // Sync a webview's position/size to match the web-viewer-body container
   const syncWebviewPosition = useCallback(async (webview: any) => {
@@ -132,8 +138,60 @@ export function WorkArea() {
       return;
     }
 
+    // Mark as loading for this tab
+    setWebviewStatus((prev) => ({ ...prev, [tabId]: 'loading' }));
+
     // Create new webview — delay to ensure the container is visible and has layout
     const createTimer = setTimeout(async () => {
+      // ── Step 1: Validate URL format ──────────────────────────────────────
+      try {
+        const parsed = new URL(url);
+        if (!['http:', 'https:'].includes(parsed.protocol)) throw new Error('bad protocol');
+      } catch {
+        setWebviewStatus((prev) => ({ ...prev, [tabId]: { error: { code: 'invalid_url' } } }));
+        return;
+      }
+
+      // ── Step 2: Network pre-check via Rust (no CORS restrictions) ───────
+      try {
+        const { invoke } = await import('@tauri-apps/api/core');
+        const result = await invoke<{
+          reachable: boolean;
+          status: number;
+          x_frame_options: string;
+          csp: string;
+          error: string;
+        }>('check_url', { url });
+
+        if (!result.reachable) {
+          const msg = result.error.toLowerCase();
+          let code: WebviewError['code'] = 'unknown';
+          if (msg.includes('timed out') || msg.includes('timeout')) code = 'timeout';
+          else if (msg.includes('dns') || msg.includes('resolve') || msg.includes('no such host')) code = 'dns';
+          else if (msg.includes('refused') || msg.includes('connection refused')) code = 'refused';
+          setWebviewStatus((prev) => ({ ...prev, [tabId]: { error: { code } } }));
+          return;
+        }
+
+        const xfoUpper = result.x_frame_options.toUpperCase();
+        if (xfoUpper === 'DENY' || xfoUpper === 'SAMEORIGIN') {
+          setWebviewStatus((prev) => ({ ...prev, [tabId]: { error: { code: 'blocked' } } }));
+          return;
+        }
+        if (result.csp && /frame-ancestors\s+['"]?none['"]?/i.test(result.csp)) {
+          setWebviewStatus((prev) => ({ ...prev, [tabId]: { error: { code: 'blocked' } } }));
+          return;
+        }
+        if (result.status >= 400) {
+          setWebviewStatus((prev) => ({ ...prev, [tabId]: { error: { code: 'http', status: result.status } } }));
+          return;
+        }
+      } catch (invokeErr) {
+        console.warn('[WorkArea] check_url invoke failed, proceeding anyway:', invokeErr);
+        // If invoke itself fails (e.g. non-Tauri env), just proceed to create the webview
+      }
+
+      // ── Step 3: Create native Webview ────────────────────────────────────
       try {
         const { getCurrentWindow } = await import('@tauri-apps/api/window');
         const { Webview } = await import('@tauri-apps/api/webview');
@@ -151,10 +209,22 @@ export function WorkArea() {
         });
         webview.once('tauri://error', (e: any) => {
           console.error('[WorkArea] Webview creation error:', e);
+          setWebviewStatus((prev) => ({ ...prev, [tabId]: { error: { code: 'unknown' } } }));
+        });
+        webview.once('tauri://created', () => {
+          setWebviewStatus((prev) => ({ ...prev, [tabId]: 'ready' }));
         });
         webviewInstances.current.set(tabId, webview);
+        // Safety net: if tauri://created never fires (rare), show error after 12s
+        setTimeout(() => {
+          setWebviewStatus((prev) => {
+            if (prev[tabId] === 'loading') return { ...prev, [tabId]: { error: { code: 'unknown' } } };
+            return prev;
+          });
+        }, 12000);
       } catch (error) {
         console.error('[WorkArea] Failed to create embedded webview:', error);
+        setWebviewStatus((prev) => ({ ...prev, [tabId]: { error: { code: 'unknown' } } }));
       }
     }, 150);
 
@@ -182,6 +252,11 @@ export function WorkArea() {
       if (!openTabIds.has(id)) {
         try { wv.close(); } catch {}
         webviewInstances.current.delete(id);
+        setWebviewStatus((prev) => {
+          const next = { ...prev };
+          delete next[id];
+          return next;
+        });
       }
     }
   }, [tabs]);
@@ -600,6 +675,83 @@ export function WorkArea() {
             </svg>
           </button>
         </div>
+
+        {/* Loading overlay */}
+        {activeTab?.id && webviewStatus[activeTab.id] === 'loading' && (
+          <div className="web-viewer-status">
+            <div className="web-viewer-spinner" />
+            <span>正在连接…</span>
+          </div>
+        )}
+
+        {/* Error overlay */}
+        {activeTab?.id && typeof webviewStatus[activeTab.id] === 'object' && (() => {
+          const s = webviewStatus[activeTab.id] as { error: WebviewError };
+          const { code, status } = s.error;
+          const host = (() => { try { return new URL(activeTab.path).hostname; } catch { return activeTab.path; } })();
+          const info: { title: string; desc: string; detail?: string } =
+            code === 'invalid_url' ? {
+              title: '无效的网址',
+              desc: `"${activeTab.path}" 不是一个有效的网址，请检查拼写是否正确。`,
+            } : code === 'blocked' ? {
+              title: '网站拒绝了嵌入显示',
+              desc: `${host} 不允许在应用内打开。`,
+              detail: '该网站设置了安全策略，禁止被其他程序嵌入显示。请在外部浏览器中访问。',
+            } : code === 'dns' ? {
+              title: '找不到该网站',
+              desc: `无法解析 ${host} 的地址。`,
+              detail: '请检查网址是否有拼写错误，或者该网站可能已不存在。',
+            } : code === 'refused' ? {
+              title: '连接被拒绝',
+              desc: `${host} 拒绝了连接请求。`,
+              detail: '该网站可能暂时停止服务，或者服务器配置了访问限制。',
+            } : code === 'timeout' ? {
+              title: '连接超时',
+              desc: `连接 ${host} 超时，服务器没有响应。`,
+              detail: '请检查网络连接是否正常，或稍后再试。',
+            } : code === 'http' ? {
+              title: `请求失败（${status}）`,
+              desc: status === 404 ? `找不到页面：${host} 上不存在该内容。`
+                : status === 403 ? `访问被拒绝：无权限访问 ${host}。`
+                : status === 500 ? `服务器内部错误：${host} 出了点问题。`
+                : `服务器返回了错误状态 ${status}。`,
+            } : {
+              title: '页面无法打开',
+              desc: '加载页面时发生了未知错误。',
+            };
+          return (
+            <div className="web-viewer-status web-viewer-error">
+              <svg width="52" height="52" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.2" className="web-viewer-error-icon">
+                <circle cx="12" cy="12" r="10" />
+                <path d="M12 2a14.5 14.5 0 0 1 0 20M12 2a14.5 14.5 0 0 0 0 20M2 12h20" />
+                <line x1="4.5" y1="4.5" x2="19.5" y2="19.5" strokeWidth="1.8" stroke="#e05252" />
+              </svg>
+              <p className="web-viewer-error-title">{info.title}</p>
+              <p className="web-viewer-error-desc">{info.desc}</p>
+              {info.detail && <p className="web-viewer-error-detail">{info.detail}</p>}
+              <div className="web-viewer-error-url">{activeTab.path}</div>
+              <button
+                className="web-viewer-error-btn"
+                onClick={() => {
+                  if (!activeTab?.path) return;
+                  if (isTauri()) {
+                    import('@tauri-apps/plugin-shell').then(({ open }) => { open(activeTab.path); });
+                  } else {
+                    window.open(activeTab.path, '_blank', 'noopener,noreferrer');
+                  }
+                }}
+              >
+                <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5">
+                  <path d="M12 9v4a1 1 0 0 1-1 1H3a1 1 0 0 1-1-1V5a1 1 0 0 1 1-1h4" />
+                  <path d="M9 2h5v5" />
+                  <line x1="14" y1="2" x2="7" y2="9" />
+                </svg>
+                在外部浏览器打开
+              </button>
+            </div>
+          );
+        })()}
+
         <div ref={webViewerRef} className="web-viewer-body" />
       </div>
 
