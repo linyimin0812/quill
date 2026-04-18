@@ -87,9 +87,10 @@ export class ServerVaultProvider extends BaseVaultProvider {
     await this.request(`/file?path=${encodeURIComponent(path)}`, { method: 'DELETE' });
   }
 
-  async listFiles(path: string, recursive?: boolean): Promise<VaultEntry[]> {
+  async listFiles(path: string, recursive?: boolean, showHidden?: boolean): Promise<VaultEntry[]> {
     const params = new URLSearchParams({ path });
     if (recursive) params.set('recursive', 'true');
+    if (showHidden) params.set('showHidden', 'true');
     const response = await this.request(`/list?${params.toString()}`);
     const data = await response.json();
     return deserializeEntries(data as RawVaultEntry[]);

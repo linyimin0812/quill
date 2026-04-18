@@ -10,7 +10,7 @@ import {
   rectangularSelection,
   crosshairCursor,
 } from '@codemirror/view';
-import { defaultKeymap, history, historyKeymap, indentWithTab } from '@codemirror/commands';
+import { defaultKeymap, history, historyKeymap, indentWithTab, selectAll } from '@codemirror/commands';
 import { markdown, markdownLanguage } from '@codemirror/lang-markdown';
 import { languages } from '@codemirror/language-data';
 import {
@@ -29,7 +29,7 @@ import {
   completionKeymap,
 } from '@codemirror/autocomplete';
 import { searchKeymap, highlightSelectionMatches } from '@codemirror/search';
-import { lintKeymap } from '@codemirror/lint';
+import { lintKeymap, linter, lintGutter, type Diagnostic } from '@codemirror/lint';
 import { useEditorStore } from '@/store/editorStore';
 import { useSettingsStore } from '@/store/settingsStore';
 import {
@@ -43,7 +43,36 @@ import {
   type CodeBlockMenuState,
 } from './extensions/CodeBlockExtension';
 import { orderedListExtension } from './extensions/OrderedListPlugin';
+import { json as jsonLanguage } from '@codemirror/lang-json';
 import type { ShortcutItem } from '@/store/settingsStore';
+
+/** JSON linter: validates JSON syntax and highlights only the error line */
+function jsonLintSource(view: EditorView): Diagnostic[] {
+  const content = view.state.doc.toString();
+  if (!content.trim()) return [];
+  try {
+    JSON.parse(content);
+    return [];
+  } catch (err) {
+    const message = err instanceof SyntaxError ? err.message : 'Invalid JSON';
+    // Try to extract position from error message (e.g. "at position 42")
+    const posMatch = message.match(/position\s+(\d+)/i);
+    let errorPos = 0;
+    if (posMatch) {
+      errorPos = Math.min(parseInt(posMatch[1], 10), content.length);
+    } else {
+      // Fallback: try to extract line number (e.g. "line 5 column 3")
+      const lineMatch = message.match(/line\s+(\d+)/i);
+      if (lineMatch) {
+        const lineNum = Math.min(parseInt(lineMatch[1], 10), view.state.doc.lines);
+        errorPos = view.state.doc.line(lineNum).from;
+      }
+    }
+    // Always highlight only the single error line
+    const errorLine = view.state.doc.lineAt(errorPos);
+    return [{ from: errorLine.from, to: errorLine.to, message, severity: 'error' }];
+  }
+}
 
 /** Convert display key symbols (⌘, Shift, etc.) to CodeMirror key format (Mod-Shift-s) */
 function shortcutToCmKey(keys: string[]): string {
@@ -207,6 +236,7 @@ export const QuillEditor = forwardRef<QuillEditorHandle, QuillEditorProps>(
         highlightActiveLine(),
         highlightSelectionMatches(),
         keymap.of([
+          { key: 'Mod-a', run: selectAll },
           ...closeBracketsKeymap,
           ...defaultKeymap,
           ...searchKeymap,
@@ -263,13 +293,25 @@ export const QuillEditor = forwardRef<QuillEditorHandle, QuillEditorProps>(
 
       // For code files, dynamically load the matching language support
       if (!isMarkdown && filePath) {
-        const langDesc = LanguageDescription.matchFilename(languages, filePath);
-        if (langDesc) {
-          langDesc.load().then((langSupport) => {
-            view.dispatch({
-              effects: langCompartment.current.reconfigure(langSupport),
-            });
+        const isJson = /\.json$/i.test(filePath);
+        if (isJson) {
+          // JSON files: use dedicated language support + lint
+          view.dispatch({
+            effects: langCompartment.current.reconfigure([
+              jsonLanguage(),
+              lintGutter(),
+              linter(jsonLintSource, { delay: 300 }),
+            ]),
           });
+        } else {
+          const langDesc = LanguageDescription.matchFilename(languages, filePath);
+          if (langDesc) {
+            langDesc.load().then((langSupport) => {
+              view.dispatch({
+                effects: langCompartment.current.reconfigure(langSupport),
+              });
+            });
+          }
         }
       }
 

@@ -153,6 +153,8 @@ pub fn run() {
             commands::navigate_webview,
             commands::close_webview,
             commands::set_webview_position,
+            commands::hide_all_webviews,
+            commands::on_webview_url_changed,
         ])
         .on_window_event(|_window, event| {
             // Kill sidecar when the main window is destroyed (closed)

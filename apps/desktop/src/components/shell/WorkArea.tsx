@@ -250,6 +250,25 @@ export function WorkArea() {
     };
   }, []);
 
+  // Listen for webview URL changes and update the corresponding tab
+  useEffect(() => {
+    if (!isTauri()) return;
+    let unlisten: (() => void) | null = null;
+    import('@tauri-apps/api/event').then(({ listen }) => {
+      listen<{ label: string; url: string; title: string }>('webview-url-changed', (event) => {
+        const { label, url, title } = event.payload;
+        // Find the tab id that corresponds to this webview label
+        for (const [tabId, wvLabel] of webviewLabels.current.entries()) {
+          if (wvLabel === label) {
+            useEditorStore.getState().updateWebTabUrl(tabId, url, title);
+            break;
+          }
+        }
+      }).then((fn) => { unlisten = fn; });
+    });
+    return () => { unlisten?.(); };
+  }, []);
+
   // Pane resize (editor vs preview split ratio)
   const [editorFlex, setEditorFlex] = useState(1);
   const [previewFlex, setPreviewFlex] = useState(1);

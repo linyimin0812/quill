@@ -80,7 +80,7 @@ export class VaultService {
 
   // ── Directory Operations ──
 
-  async listFiles(dirPath: string, vaultRoot?: string, recursive = false): Promise<VaultEntry[]> {
+  async listFiles(dirPath: string, vaultRoot?: string, recursive = false, showHidden = false): Promise<VaultEntry[]> {
     const root = this.getRoot(vaultRoot);
     await this.ensureDir(root);
     const resolved = this.resolveSafe(dirPath || '.', vaultRoot);
@@ -89,7 +89,7 @@ export class VaultService {
       const results: VaultEntry[] = [];
 
       for (const entry of entries) {
-        if (entry.name.startsWith('.')) continue;
+        if (!showHidden && entry.name.startsWith('.')) continue;
         const entryPath = dirPath ? `${dirPath}/${entry.name}` : entry.name;
         const fullPath = path.join(resolved, entry.name);
 
@@ -105,7 +105,7 @@ export class VaultService {
         } else if (entry.isDirectory()) {
           const dirEntry: VaultEntry = { path: entryPath, name: entry.name, type: 'dir' };
           if (recursive) {
-            dirEntry.children = await this.listFiles(entryPath, vaultRoot, true);
+            dirEntry.children = await this.listFiles(entryPath, vaultRoot, true, showHidden);
           }
           results.push(dirEntry);
         }

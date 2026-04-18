@@ -198,11 +198,14 @@ export const useVaultStore = create<VaultState>()(
             set({ currentVault: config, activeVaultId: config.id });
             syncToSettings(config);
             await persistVaultConfigs(get().vaults, config.id);
-            await get().refreshFileTree();
 
-            // Clear editor tabs when switching vaults, then restore saved tabs for the new vault
+            // Clear editor tabs immediately before refreshing file tree for the new vault
             const { useEditorStore } = await import('./editorStore');
             useEditorStore.setState({ tabs: [], activeTabId: null });
+
+            await get().refreshFileTree();
+
+            // Restore saved tabs for the new vault
             await useEditorStore.getState().restoreOpenTabs();
           } catch (err) {
             const message = err instanceof Error ? err.message : 'Failed to switch vault';
@@ -215,7 +218,8 @@ export const useVaultStore = create<VaultState>()(
 
         refreshFileTree: async () => {
           try {
-            const entries = await get().manager.listFiles('', true);
+            const showHidden = useSettingsStore.getState().showHiddenFiles;
+            const entries = await get().manager.listFiles('', true, showHidden);
             set({ fileTree: entries, error: null });
           } catch (err) {
             const message = err instanceof Error ? err.message : 'Failed to load file tree';

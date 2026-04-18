@@ -34,6 +34,7 @@ interface SettingsState {
   lineHeight: number;
   showAiPanel: boolean;
   showStatusBar: boolean;
+  showHiddenFiles: boolean;
 
   // Editor
   editorFont: string;
@@ -103,7 +104,7 @@ function debouncedPersist(state: Partial<SettingsState>) {
   if (persistTimer) clearTimeout(persistTimer);
   persistTimer = setTimeout(() => {
     // Extract only serializable settings (exclude functions and runtime state)
-    const { theme, fontSize, lineHeight, showAiPanel, showStatusBar,
+    const { theme, fontSize, lineHeight, showAiPanel, showStatusBar, showHiddenFiles,
       editorFont, editorFontSize, tabSize, wrapColumn, showLineNumbers,
       syntaxHighlight, autoSave, spellCheck, linkOpenMode, vaultPath, imagePath, docExtension,
       watchFileChanges, trashOnDelete, syncMethod, syncEndpoint, syncAccessKey,
@@ -111,7 +112,7 @@ function debouncedPersist(state: Partial<SettingsState>) {
       llmModel, temperature, maxTokens, ollamaUrl, systemPrompt, writingStyle,
       keepContext, autoSendDoc, vaultName, shortcuts } = state as SettingsState;
     storageClient.set(SETTINGS_STORAGE_KEY, {
-      theme, fontSize, lineHeight, showAiPanel, showStatusBar,
+      theme, fontSize, lineHeight, showAiPanel, showStatusBar, showHiddenFiles,
       editorFont, editorFontSize, tabSize, wrapColumn, showLineNumbers,
       syntaxHighlight, autoSave, spellCheck, linkOpenMode, vaultPath, imagePath, docExtension,
       watchFileChanges, trashOnDelete, syncMethod, syncEndpoint, syncAccessKey,
@@ -134,6 +135,7 @@ export const useSettingsStore = create<SettingsState>((set) => ({
   lineHeight: 1.7,
   showAiPanel: true,
   showStatusBar: true,
+  showHiddenFiles: true,
 
   // Editor
   editorFont: 'DM Mono',

@@ -24,7 +24,7 @@ export abstract class BaseVaultProvider implements VaultProvider {
   abstract readFile(path: string): Promise<string>;
   abstract writeFile(path: string, content: string): Promise<void>;
   abstract deleteFile(path: string): Promise<void>;
-  abstract listFiles(path: string, recursive?: boolean): Promise<VaultEntry[]>;
+  abstract listFiles(path: string, recursive?: boolean, showHidden?: boolean): Promise<VaultEntry[]>;
   abstract createDir(path: string): Promise<void>;
   abstract deleteDir(path: string): Promise<void>;
 }

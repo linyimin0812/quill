@@ -15,6 +15,7 @@ import { useVaultStore } from './store/vaultStore';
 import { useEditorStore } from './store/editorStore';
 import { registerBuiltinPlugins } from '@quill/container-plugins';
 import { checkAuthStatus, getAuthToken, setAuthToken, getApiRoot } from './utils/authToken';
+import { isTauri } from './utils/platform';
 
 // Register all built-in container plugins at app startup
 registerBuiltinPlugins();
@@ -126,6 +127,15 @@ export default function App() {
     };
     initializeVault();
   }, [authState]);
+
+  // ── Hide all native webviews when leaving the editor page ──
+  useEffect(() => {
+    if (currentPage !== 'editor' && isTauri()) {
+      import('@tauri-apps/api/core').then(({ invoke }) => {
+        invoke('hide_all_webviews').catch(() => {});
+      });
+    }
+  }, [currentPage]);
 
   // ── Global Ctrl+S / Cmd+S ──
   useEffect(() => {

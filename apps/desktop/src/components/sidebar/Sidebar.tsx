@@ -31,6 +31,7 @@ export function Sidebar({ onFileSelect }: SidebarProps): React.JSX.Element {
   const [collapsed, setCollapsed] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [expandedDirs, setExpandedDirs] = useState<Set<string>>(new Set());
+  const [resizerHovered, setResizerHovered] = useState(false);
   const hasAutoExpanded = useRef(false);
 
   // Auto-expand first 2 levels when fileTree is loaded
@@ -251,6 +252,30 @@ export function Sidebar({ onFileSelect }: SidebarProps): React.JSX.Element {
     });
   }, []);
 
+  /** Collect all directory paths from the file tree */
+  const collectAllDirPaths = useCallback((entries: VaultEntry[]): string[] => {
+    const paths: string[] = [];
+    const walk = (items: VaultEntry[]) => {
+      for (const item of items) {
+        if (item.type === 'dir') {
+          paths.push(item.path);
+          if (item.children) walk(item.children);
+        }
+      }
+    };
+    walk(entries);
+    return paths;
+  }, []);
+
+  const expandAllDirs = useCallback(() => {
+    const allPaths = collectAllDirPaths(fileTree);
+    setExpandedDirs(new Set(allPaths));
+  }, [fileTree, collectAllDirPaths]);
+
+  const collapseAllDirs = useCallback(() => {
+    setExpandedDirs(new Set());
+  }, []);
+
   /** Check if an entry (or any descendant) matches the search query */
   const matchesSearch = (entry: VaultEntry, query: string): boolean => {
     if (entry.name.toLowerCase().includes(query)) return true;
@@ -372,15 +397,6 @@ export function Sidebar({ onFileSelect }: SidebarProps): React.JSX.Element {
 
   return (
     <>
-      {collapsed && (
-        <div className="sidebar-collapsed">
-          <button className="sb-expand-btn" onClick={() => setCollapsed(false)} title="展开文件栏">
-            <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5">
-              <polyline points="6,3 11,8 6,13" />
-            </svg>
-          </button>
-        </div>
-      )}
       <aside className="sidebar" style={{ width: collapsed ? '0px' : `${width}px`, display: collapsed ? 'none' : undefined }}>
         {/* Vault selector */}
         <div className="sb-header">
@@ -404,6 +420,18 @@ export function Sidebar({ onFileSelect }: SidebarProps): React.JSX.Element {
             </button>
             <button className="sb-action-btn" onClick={() => useVaultStore.getState().refreshFileTree()} title="刷新文件树">
               <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5"><path d="M13.5 8a5.5 5.5 0 01-9.8 3.4M2.5 8a5.5 5.5 0 019.8-3.4"/><polyline points="13.5,3 13.5,6.5 10,6.5"/><polyline points="2.5,13 2.5,9.5 6,9.5"/></svg>
+            </button>
+            <button className="sb-action-btn" onClick={expandAllDirs} title="展开全部文件夹">
+              <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.3">
+                <polyline points="4,5 8,9 12,5" />
+                <polyline points="4,9 8,13 12,9" />
+              </svg>
+            </button>
+            <button className="sb-action-btn" onClick={collapseAllDirs} title="折叠全部文件夹">
+              <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.3">
+                <polyline points="4,9 8,5 12,9" />
+                <polyline points="4,13 8,9 12,13" />
+              </svg>
             </button>
           </div>
           </div>
@@ -474,8 +502,29 @@ export function Sidebar({ onFileSelect }: SidebarProps): React.JSX.Element {
         )}
       </aside>
 
-      {/* Resize handle */}
-      <div className="resizer" onMouseDown={handleMouseDown} />
+      {/* Resize handle with collapse/expand toggle */}
+      <div
+        className={`resizer-wrapper ${collapsed ? 'collapsed' : ''}`}
+        onMouseEnter={() => setResizerHovered(true)}
+        onMouseLeave={() => setResizerHovered(false)}
+      >
+        <div className="resizer" onMouseDown={collapsed ? undefined : handleMouseDown} />
+        {(resizerHovered || collapsed) && (
+          <button
+            className="resizer-toggle-btn"
+            onClick={() => setCollapsed((prev) => !prev)}
+            title={collapsed ? '展开文件栏' : '关闭文件栏'}
+          >
+            <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.8">
+              {collapsed ? (
+                <polyline points="6,3 11,8 6,13" />
+              ) : (
+                <polyline points="10,3 5,8 10,13" />
+              )}
+            </svg>
+          </button>
+        )}
+      </div>
     </>
   );
 }

@@ -331,6 +331,7 @@ export function SettingsPage() {
             </div>
             <div className="tr"><div className="tr-info"><h4>默认显示 AI 面板</h4><p>打开编辑器时自动展开 AI 对话面板</p></div><Toggle value={store.showAiPanel} onChange={(v) => updateSettings({ showAiPanel: v })} /></div>
             <div className="tr"><div className="tr-info"><h4>状态栏</h4><p>底部显示字数、光标位置等信息</p></div><Toggle value={store.showStatusBar} onChange={(v) => updateSettings({ showStatusBar: v })} /></div>
+            <div className="tr"><div className="tr-info"><h4>显示隐藏文件</h4><p>在文件树中显示以 . 开头的隐藏文件和文件夹</p></div><Toggle value={store.showHiddenFiles} onChange={(v) => { updateSettings({ showHiddenFiles: v }); import('@/store/vaultStore').then(m => m.useVaultStore.getState().refreshFileTree()); }} /></div>
           </div>
         )}
 

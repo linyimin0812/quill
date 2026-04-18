@@ -15,6 +15,26 @@ import type { ContainerProps } from '@quill/container-plugins';
 import { getSidecarOrigin, isTauri } from '@/utils/platform';
 import { useSettingsStore } from '@/store/settingsStore';
 import { useEditorStore } from '@/store/editorStore';
+/**
+ * Rehype plugin: remove <br> nodes inside <code> elements (within <pre> blocks).
+ * remark-breaks converts soft line breaks to <br> in paragraphs,
+ * but can also leak <br> into code blocks, causing extra blank lines in preview.
+ */
+function rehypeRemoveCodeBreaks() {
+  function walk(node: any, insideCode: boolean) {
+    if (!node || !Array.isArray(node.children)) return;
+    const isCodeElement = node.type === 'element' && node.tagName === 'code';
+    if (isCodeElement || insideCode) {
+      node.children = node.children.filter(
+        (child: any) => !(child.type === 'element' && child.tagName === 'br'),
+      );
+    }
+    for (const child of node.children) {
+      walk(child, insideCode || isCodeElement);
+    }
+  }
+  return (tree: any) => walk(tree, false);
+}
 
 // Ensure built-in plugins are registered once
 registerBuiltinPlugins();
@@ -140,6 +160,7 @@ export function MarkdownPreview({ content, currentFilePath, vaultRoot }: Markdow
         .use(remarkRehype, { allowDangerousHtml: true })
         .use(rehypeRaw)
         .use(rehypeHighlight, { ignoreMissing: true } as any)
+        .use(rehypeRemoveCodeBreaks)
         .use(rehypeReact, {
           jsx,
           jsxs,

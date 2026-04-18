@@ -51,9 +51,10 @@ export class VaultController {
   async listFiles(
     @Query('path') dirPath: string,
     @Query('recursive') recursive: string,
+    @Query('showHidden') showHidden: string,
     @Headers('x-vault-root') vaultRoot: string,
   ) {
-    return this.vaultService.listFiles(dirPath, vaultRoot, recursive === 'true');
+    return this.vaultService.listFiles(dirPath, vaultRoot, recursive === 'true', showHidden === 'true');
   }
 
   @Post('dir')

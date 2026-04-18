@@ -62,6 +62,8 @@ interface EditorState {
   setCursorPosition: (line: number, col: number) => void;
   setWordCount: (count: number) => void;
 
+  /** Update a web tab's URL and title after in-page navigation */
+  updateWebTabUrl: (tabId: string, url: string, title: string) => void;
   /** Open a web URL in a new tab */
   openWebTab: (url: string, title?: string) => void;
   /** Open a file from the vault (reads content via VaultStore) */
@@ -176,6 +178,14 @@ export const useEditorStore = create<EditorState>()(
       toggleAiPanel: () => set((state) => ({ aiPanelVisible: !state.aiPanelVisible })),
       setCursorPosition: (line, col) => set({ cursorLine: line, cursorCol: col }),
       setWordCount: (count) => set({ wordCount: count }),
+
+      updateWebTabUrl: (tabId, url, title) => {
+        set((state) => ({
+          tabs: state.tabs.map((tab) =>
+            tab.id === tabId ? { ...tab, path: url, name: title || tab.name } : tab,
+          ),
+        }));
+      },
 
       openWebTab: (url, title) => {
         const tabId = `web:${url}`;
